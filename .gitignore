@@ -1,0 +1,7 @@
+/target/
+*.pdb
+.idea/
+.vscode/
+.env
+.env.*
+!.env.example
