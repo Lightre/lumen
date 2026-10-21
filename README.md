@@ -13,6 +13,10 @@ through its folder, and focus on the image.
 
 **Early development · Windows only · JPEG, PNG, and WebP**
 
+<p align="center">
+  <img src="assets/readme/screenshot.png" alt="Lumen displaying an alpine lake at dawn, with its dark toolbar and image controls" width="880">
+</p>
+
 ## Features
 
 - Open photos with a file picker, drag and drop, or Windows **Open with**.

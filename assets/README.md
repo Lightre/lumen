@@ -14,6 +14,9 @@ the small sizes before committing.
 The README banner and static badges are in `readme/`. They use SVG geometry and
 system font references, with no embedded fonts or external image dependencies.
 
+`readme/screenshot.png` presents an unaltered Lumen screenshot on a dark backdrop.
+The displayed alpine landscape was generated with AI for this project.
+
 Original assets are licensed under GPL-3.0-only. See [LICENSE](../LICENSE),
 [COPYRIGHT](../COPYRIGHT), and [BRANDING.md](../BRANDING.md) for the project's
 licensing and brand identification policy.
