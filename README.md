@@ -1,23 +1,22 @@
 # Lumen
 
-Windows için Rust ile geliştirilen sade, modern bir fotoğraf görüntüleyicisi.
+A simple, modern photo viewer for Windows, built with Rust.
 
-Proje hazırlık aşamasında; henüz grafik arayüz veya fotoğraf açma özelliği yoktur.
+The project is being set up. A graphical interface and image loading are not implemented yet.
 
-## İlk sürüm kapsamı
+## Initial scope
 
-- Windows masaüstü uygulaması.
-- JPEG, PNG ve WebP açma.
-- Aynı klasörde önceki ve sonraki fotoğrafa geçiş.
-- Yakınlaştırma, görüntüyü sürükleyerek gezinme ve tam ekran.
-- Siyaha yakın koyu gri, sade bir arayüz.
+- Windows desktop application.
+- JPEG, PNG, and WebP support.
+- Previous and next image navigation within the same folder.
+- Zoom, pan, and full screen.
+- A minimal interface in near-black and dark gray tones.
 
-Düzenleme ve çizim kapsam dışıdır. Döndürme, tema ayarları, ek biçimler ve diğer
-işletim sistemleri sonraki sürümlerde değerlendirilecektir.
+Editing and drawing are out of scope. Rotation, theme settings, additional formats, and other operating systems will be considered for later releases.
 
-## Geliştirme
+## Development
 
-Rust stable, MSVC araç zinciri ve Windows C++ derleme araçları gerekir.
+Requires stable Rust with the MSVC toolchain and Windows C++ build tools.
 
 ```powershell
 cargo run
@@ -26,19 +25,15 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 ```
 
-`Cargo.toml` proje bilgilerini ve bağımlılıklarını, `Cargo.lock` bağımlılıkların
-kesin sürümlerini tutar. Uygulamanın giriş noktası `src/main.rs` dosyasıdır.
+`Cargo.toml` defines package metadata and dependencies. `Cargo.lock` records exact dependency versions. The entry point is `src/main.rs`.
 
-## Sıradaki adımlar
+## Next steps
 
-1. Koyu temalı ilk pencere ve boş ekran.
-2. Dosya açma ve tek fotoğraf görüntüleme.
-3. Klasörde gezinme, yakınlaştırma, sürükleme ve tam ekran.
-4. Hata durumları, büyük fotoğraflar ve performans ölçümleri.
+1. Create the first window with a dark theme and an empty state.
+2. Open and display a single image.
+3. Add folder navigation, zoom, pan, and full screen.
+4. Handle errors and large images, then measure performance.
 
-Arayüz için ilk aday `egui/eframe`, görüntü çözümleme için `image` kütüphanesidir.
-Bağımlılıklar ilk pencere aşamasında eklenecektir. Görüntü çözümleme arayüzü
-kilitlemeyecek şekilde tasarlanacak; bellek kullanımı ve ön yükleme ölçümlerle
-sınırlandırılacaktır.
+The initial candidates are `egui/eframe` for the interface and `image` for decoding. Dependencies will be added when implementing the first window. Image decoding should keep the interface responsive; memory use and preloading will be bounded and guided by measurements.
 
-Çalışma düzeni için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasına bakın.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.

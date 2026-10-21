@@ -1,3 +1,3 @@
 fn main() {
-    println!("Lumen — fotoğraf görüntüleyicisi hazırlık aşamasında.");
+    println!("Lumen — photo viewer setup in progress.");
 }

@@ -1,29 +1,24 @@
-# Çalışma düzeni
+# Contributing
 
-## Git ve GitHub
+## Git and GitHub
 
-- `main` çalışır durumda tutulur.
-- Her anlamlı iş için kısa ömürlü bir dal açılır: `feat/open-image`,
-  `fix/zoom-anchor`, `chore/ci` gibi.
-- Commit'ler tek bir mantıksal değişikliği içerir. Başlıklar kısa ve İngilizcedir:
-  `feat: open local images`, `fix: preserve zoom position` gibi.
-- GitHub bağlantısı kurulduğunda değişiklikler PR ile birleştirilir.
-- PR açıklaması sonucu, doğrulama adımlarını ve varsa bilinen eksikleri belirtir.
-- PR kontrolleri geçtikten sonra squash merge tercih edilir; tamamlanan dal silinir.
-- Sürümler `v0.1.0` gibi etiketlerle işaretlenir. Yayın paketleme daha sonra eklenir.
+- Keep `main` working.
+- Use a short-lived branch for each meaningful task: `feat/open-image`, `fix/zoom-anchor`, or `chore/ci`.
+- Each commit should contain one logical change. Use concise English titles such as `feat: open local images`.
+- Once the GitHub remote is connected, merge changes through pull requests.
+- PR descriptions should explain the result, validation, and known limitations.
+- Prefer squash merges after checks pass; delete completed branches.
+- Tag releases using versions such as `v0.1.0`. Release packaging will be added later.
 
-İlk hazırlık commit'i doğrudan `main` üzerinde oluşturulur. Henüz GitHub uzak
-deposu, dal koruması veya otomatik birleştirme yapılandırılmamıştır.
+The initial setup commit was created directly on `main`. The GitHub remote, branch protection, and automatic merging have not been configured yet.
 
-## Doğrulama
+## Validation
 
-PR öncesinde `cargo fmt --all -- --check`,
-`cargo clippy --locked --all-targets -- -D warnings` ve `cargo test --locked`
-çalıştırılır. GitHub Actions aynı kontrolleri Windows üzerinde çalıştırır.
-Davranış testleri özellikler eklendikçe yazılır; grafik arayüz ayrıca elle kontrol edilir.
+Before opening a PR, run `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked`.
+GitHub Actions runs the same checks on Windows. Add meaningful behavior tests as features are implemented; check the graphical interface manually as well.
 
-## Birlikte geliştirme
+## Collaboration
 
-Başlangıçta tek ajanla ilerlenir. Alt ajan kullanımı kullanıcı talebiyle yapılır.
-İşler küçük, gözden geçirilebilir parçalara ayrılır. Teknik kararların nedeni ve
-ilgili Rust kavramları geliştirme sırasında kısa açıklamalarla paylaşılır.
+Start with one agent. Use subagents when requested by the user. Keep tasks small and reviewable. Explain technical decisions and relevant Rust concepts briefly during development.
+
+Keep source code, UI text, documentation, commit messages, and PR content in English. Conversation with the project owner continues in Turkish.

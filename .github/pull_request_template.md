@@ -1,11 +1,11 @@
-## Değişiklik
+## Changes
 
-<!-- Hangi sorun çözüldü, kullanıcı açısından ne değişti? -->
+<!-- What problem does this solve, and what changes for the user? -->
 
-## Doğrulama
+## Validation
 
-<!-- Çalıştırılan kontrolleri ve gerekiyorsa elle yapılan denemeleri yazın. -->
+<!-- Describe automated checks and any manual verification. -->
 
-## Bilinen eksikler
+## Known limitations
 
-<!-- Varsa kalan sınırlamaları belirtin. -->
+<!-- Describe any remaining limitations, if applicable. -->
