@@ -22,10 +22,9 @@ through its folder, and focus on the image.
 
 ## Try it
 
-Development builds are available through **[Actions → Windows Package](https://github.com/Lightre/lumen/actions/workflows/package-windows.yml)**.
-Select a successful run, download its artifact, and extract the ZIP before
-running `lumen.exe`. Artifacts require repository access and expire after seven
-days. There is no stable release or installer yet.
+Download the latest release from **[GitHub Releases](https://github.com/Lightre/lumen/releases/latest)**.
+The repository is private, so downloading requires a GitHub account with
+repository access. Extract the ZIP before running `lumen.exe`.
 
 To run from source, install stable Rust with the MSVC toolchain and the Windows
 C++ build tools, including the Windows SDK, then run:
