@@ -24,7 +24,7 @@ impl Folder {
         let mut files: Vec<_> = entries
             .filter_map(Result::ok)
             .map(|entry| entry.path())
-            .filter(|path| path.is_file() && (supported(path) || *path == current))
+            .filter(|path| (supported(path) || *path == current) && path.is_file())
             .collect();
         if !files.contains(&current) {
             files.push(current.clone());
