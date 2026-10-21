@@ -65,6 +65,8 @@ is not a claim that every listed component is embedded in the executable.
 
 Review the generated text and bundled font notices before distribution. The
 package script rejects a notice snapshot generated for a different `Cargo.lock`.
+The lockfile hash normalizes line endings to LF so Git checkout settings do not
+invalidate the snapshot.
 The package also includes the active Rust toolchain's standard library notices.
 Build and package with the same toolchain.
 

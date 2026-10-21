@@ -17,7 +17,9 @@ foreach ($legalName in $legalFiles) {
         throw "Missing legal notice: $legalName"
     }
 }
-$lockHash = (Get-FileHash -LiteralPath (Join-Path $projectRoot 'Cargo.lock') -Algorithm SHA256).Hash.ToLowerInvariant()
+$lockText = [System.IO.File]::ReadAllText((Join-Path $projectRoot 'Cargo.lock')).Replace("`r`n", "`n")
+$lockBytes = [System.Text.Encoding]::UTF8.GetBytes($lockText)
+$lockHash = [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($lockBytes)).ToLowerInvariant()
 $notices = Get-Content -LiteralPath (Join-Path $projectRoot 'THIRD_PARTY_NOTICES.txt') -Raw
 if (-not $notices.Contains("Cargo.lock SHA-256: $lockHash")) {
     throw 'Third-party notices are out of date. Run python scripts/update-third-party-notices.py and review the output.'
