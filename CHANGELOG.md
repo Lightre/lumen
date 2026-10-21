@@ -5,6 +5,8 @@ list of merged pull requests.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-22
+
 ### Added
 
 - A minimal dark interface for viewing JPEG, PNG, and WebP photos on Windows.
