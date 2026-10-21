@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/release.yml'
+      - 'scripts/release_metadata.py'
+      - 'scripts/test_release_metadata.py'
+      - 'CHANGELOG.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Test release validation
+        run: python -m unittest discover -s scripts -p test_release_metadata.py
+      - name: Validate version and prepare notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          TAG_PUSH: ${{ github.event_name == 'push' }}
+        run: |
+          if [[ "$TAG_PUSH" == "true" ]]; then
+            git merge-base --is-ancestor HEAD origin/main
+            python scripts/release_metadata.py --tag "$RELEASE_TAG"
+          else
+            python scripts/release_metadata.py
+          fi
+      - name: Upload notes preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-notes-preview
+          path: target/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  check:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+
+  package:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    uses: ./.github/workflows/package-windows.yml
+    with:
+      release-assets: true
+
+  draft:
+    if: github.event_name == 'push'
+    needs: [validate, check, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: target/release-assets
+      - name: Prepare release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/release_metadata.py --tag "$RELEASE_TAG"
+      - name: Verify and create draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd target/release-assets
+          sha256sum --strict --check SHA256SUMS
+          version="${RELEASE_TAG#v}"
+          assets=("lumen-$version-windows-x64.zip" "lumen-$version-source.zip" SHA256SUMS)
+          if gh release view "$RELEASE_TAG" --json isDraft > ../existing-release.json; then
+            if [[ "$(jq -r '.isDraft' ../existing-release.json)" != "true" ]]; then
+              echo 'An already published release will not be modified.' >&2
+              exit 1
+            fi
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            options=(--draft --verify-tag --latest=false --title "Lumen $version")
+            if [[ "$version" == *-* ]]; then options+=(--prerelease); fi
+            gh release create "$RELEASE_TAG" "${assets[@]}" "${options[@]}" \
+              --generate-notes --notes "$(cat ../release-notes.md)"
+          fi

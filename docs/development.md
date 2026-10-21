@@ -108,4 +108,57 @@ artifacts with the same retention period. Build and package both from the same
 clean revision and toolchain. When distributing, make both available together
 with equivalent access; do not rely on an expired Actions artifact or GitHub's
 automatic source ZIP, which does not contain the vendored dependencies. A release
-workflow and permanent downloads are separate from this development packaging step.
+workflow provides permanent downloads only after a draft is manually published.
+
+## Releases
+
+`Release` reuses the CI and Windows Package workflows. A pushed `v*` tag validates
+the version, runs checks, and builds both packages before creating an unpublished
+GitHub Release. The draft contains the Windows ZIP, matching source ZIP, and
+`SHA256SUMS` for both archives. Tags must point to a commit already on `main`.
+The tag must exactly match `v<Cargo.toml version>`, and Cargo.lock must agree.
+Supported versions are `X.Y.Z` and `X.Y.Z-alpha.N`, `-beta.N`, or `-rc.N`.
+Prerelease versions are marked as prereleases automatically.
+
+To preview the full build without creating a tag or release, use **Actions →
+Release → Run workflow → main**. Manual runs always produce artifacts only,
+including `release-notes-preview` and `release-assets`. Pull requests that change
+release metadata run the fast validation and notes preview; regular CI and
+Windows Package checks remain separate. Previews use `Unreleased`, falling back
+to the current version's dated entry when `Unreleased` is empty after release
+preparation. They do not include GitHub's generated PR list.
+
+Before a release:
+
+1. Update the version in Cargo.toml and Cargo.lock when needed. Keep dependency
+   notices synchronized with Cargo.lock.
+2. Move the relevant `Unreleased` changes into a heading such as
+   `## [0.1.0] - YYYY-MM-DD`, using the actual release date. Keep an `Unreleased`
+   heading for future changes. Commit these updates through a pull request.
+3. After checks and package verification pass, create an annotated tag on the
+   intended `main` commit and push that specific tag: `git tag -a v0.1.0 -m
+   "Lumen 0.1.0"`, then `git push origin v0.1.0`. Do not move published tags.
+4. Review the generated draft, download and test its Windows package, and verify
+   that the source ZIP and checksums are attached. Edit the notes if needed, then
+   publish manually. Select **Set as latest release** for the intended stable
+   version; keep preview versions marked as prereleases.
+
+Notes start with the curated changelog entry and download guidance, followed by
+GitHub's generated list of merged PRs. `.github/release.yml` groups `enhancement`
+and `bug` labels under Features and Fixes, with a catch-all for other changes.
+Use `ignore-for-release` on PRs that should not appear in that generated list.
+Review the complete notes before publishing, especially for the first release.
+
+A failed draft creation can be rerun. Existing drafts receive refreshed package
+assets without overwriting manually edited notes. The workflow refuses to update
+an already published release and never publishes a draft or marks it as latest.
+The repository remains private; publishing a release does not change its visibility.
+
+Local metadata validation requires Python 3.11 or newer:
+
+```powershell
+python -m unittest discover -s scripts -p test_release_metadata.py
+python scripts/release_metadata.py
+```
+
+Pass `--tag v0.1.0` to validate the dated changelog entry for that release.
