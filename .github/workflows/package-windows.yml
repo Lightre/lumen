@@ -6,6 +6,11 @@ on:
     paths:
       - '.github/workflows/package-windows.yml'
       - 'scripts/package-windows.ps1'
+      - 'scripts/update-third-party-notices.py'
+      - 'LICENSE'
+      - 'COPYRIGHT'
+      - 'BRANDING.md'
+      - 'THIRD_PARTY_NOTICES.txt'
 
 permissions:
   contents: read
@@ -44,5 +49,10 @@ jobs:
             ${{ steps.package.outputs.directory }}/lumen.exe
             ${{ steps.package.outputs.directory }}/README.txt
             ${{ steps.package.outputs.directory }}/SHA256SUMS
+            ${{ steps.package.outputs.directory }}/LICENSE
+            ${{ steps.package.outputs.directory }}/COPYRIGHT
+            ${{ steps.package.outputs.directory }}/BRANDING.md
+            ${{ steps.package.outputs.directory }}/THIRD_PARTY_NOTICES.txt
+            ${{ steps.package.outputs.directory }}/RUST_STANDARD_LIBRARY_NOTICES.html
           if-no-files-found: error
           retention-days: 7

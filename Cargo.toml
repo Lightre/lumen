@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 description = "A simple, modern photo viewer for Windows."
+license = "GPL-3.0-only"
+repository = "https://github.com/Lightre/lumen"
 
 [dependencies]
 eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "accesskit"] }

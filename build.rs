@@ -7,6 +7,7 @@ fn main() {
             .set("FileDescription", "Lumen Photo Viewer")
             .set("InternalName", "lumen")
             .set("OriginalFilename", "lumen.exe")
+            .set("LegalCopyright", "Copyright (C) 2026 Lightre")
             .compile()
             .expect("Windows application resources must compile");
     }

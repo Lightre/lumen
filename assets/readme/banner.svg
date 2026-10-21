@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="224" viewBox="0 0 960 224" role="img" aria-labelledby="title description">
+  <title id="title">Lumen</title>
+  <desc id="description">A minimal photo viewer for Windows. Lumen's geometric L mark on a charcoal background.</desc>
+  <defs>
+    <linearGradient id="surface" x2="1" y2="1">
+      <stop stop-color="#202226"/>
+      <stop offset="1" stop-color="#141518"/>
+    </linearGradient>
+  </defs>
+  <rect x="0.5" y="0.5" width="959" height="223" rx="20" fill="url(#surface)" stroke="#32353B"/>
+  <path d="M713 1H940Q959 1 959 20V223" fill="none" stroke="#484D55"/>
+  <path d="M750 1H959V210Z" fill="#F2F2ED" opacity=".025"/>
+  <g transform="translate(54 62) scale(1.56)">
+    <rect x="2" y="2" width="60" height="60" rx="15" fill="#292C31"/>
+    <path d="M17 16h10v21h21v10H17Z" fill="#F2F2ED"/>
+    <path d="M35 16h13v13Z" fill="#B2B7BF"/>
+  </g>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="188" y="115" fill="#F2F2ED" font-size="52" font-weight="600" letter-spacing="-1.6">Lumen</text>
+    <text x="191" y="149" fill="#A9AFB9" font-size="18">A minimal photo viewer for Windows.</text>
+  </g>
+</svg>

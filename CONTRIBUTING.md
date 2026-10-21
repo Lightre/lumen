@@ -10,6 +10,12 @@
 - Use version tags such as `v0.1.0` for releases.
 - Write source code, UI text, documentation, commit messages, and pull requests in English.
 
+## License
+
+Original contributions are accepted under GPL-3.0-only. Retain existing copyright
+and license notices, and identify the origin and license of any third-party code
+or assets. See [LICENSE](LICENSE) and [BRANDING.md](BRANDING.md).
+
 ## Validation
 
 Run the following before submitting changes:
