@@ -67,15 +67,19 @@ pub struct LumenApp {
     pending: Option<Receiver<LoadResult>>,
     error: Option<String>,
     view: View,
+    startup_path: Option<PathBuf>,
 }
 
 impl LumenApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, startup_path: Option<PathBuf>) -> Self {
         let mut visuals = egui::Visuals::dark();
         visuals.panel_fill = egui::Color32::from_rgb(22, 23, 26);
         visuals.window_fill = visuals.panel_fill;
         cc.egui_ctx.set_visuals(visuals);
-        Self::default()
+        Self {
+            startup_path,
+            ..Self::default()
+        }
     }
 
     fn open(&mut self, ctx: &egui::Context, path: Option<PathBuf>) {
@@ -180,6 +184,9 @@ impl eframe::App for LumenApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.finish_loading(&ctx);
+        if let Some(path) = self.startup_path.take() {
+            self.open(&ctx, Some(path));
+        }
         let fullscreen = ctx.input(|input| input.viewport().fullscreen.unwrap_or(false));
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::F11)) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
