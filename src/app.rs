@@ -3,6 +3,54 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use crate::image_loader::{self, LoadedImage};
+use crate::navigation::{Direction, Folder};
+
+struct OpenedImage {
+    image: LoadedImage,
+    folder: Folder,
+    notice: Option<String>,
+}
+
+type LoadResult = Result<Option<OpenedImage>, String>;
+
+enum OpenRequest {
+    Pick,
+    File(PathBuf),
+    Navigate(Folder, Direction),
+}
+
+fn load_selection(path: PathBuf, max_side: u32) -> Result<OpenedImage, String> {
+    let image = image_loader::load(&path, max_side)?;
+    let (folder, notice) = match Folder::scan(&path) {
+        Ok(folder) => (folder, None),
+        Err(error) => (Folder::single(path), Some(error)),
+    };
+    Ok(OpenedImage {
+        image,
+        folder,
+        notice,
+    })
+}
+
+fn load_neighbor(
+    mut folder: Folder,
+    direction: Direction,
+    max_side: u32,
+) -> Result<OpenedImage, String> {
+    let mut skipped = false;
+    while let Some(next) = folder.neighbor(direction) {
+        folder = next;
+        if let Ok(image) = image_loader::load(folder.path(), max_side) {
+            return Ok(OpenedImage {
+                image,
+                folder,
+                notice: skipped.then(|| "Some unreadable images were skipped.".to_owned()),
+            });
+        }
+        skipped = true;
+    }
+    Err("No other readable images in this direction.".to_owned())
+}
 
 struct DisplayedImage {
     texture: egui::TextureHandle,
@@ -14,7 +62,8 @@ struct DisplayedImage {
 #[derive(Default)]
 pub struct LumenApp {
     image: Option<DisplayedImage>,
-    pending: Option<Receiver<Result<Option<LoadedImage>, String>>>,
+    folder: Option<Folder>,
+    pending: Option<Receiver<LoadResult>>,
     error: Option<String>,
 }
 
@@ -28,6 +77,18 @@ impl LumenApp {
     }
 
     fn open(&mut self, ctx: &egui::Context, path: Option<PathBuf>) {
+        self.start_loading(ctx, path.map_or(OpenRequest::Pick, OpenRequest::File));
+    }
+
+    fn navigate(&mut self, ctx: &egui::Context, direction: Direction) {
+        if let Some(folder) = &self.folder
+            && folder.neighbor(direction).is_some()
+        {
+            self.start_loading(ctx, OpenRequest::Navigate(folder.clone(), direction));
+        }
+    }
+
+    fn start_loading(&mut self, ctx: &egui::Context, request: OpenRequest) {
         if self.pending.is_some() {
             return;
         }
@@ -41,18 +102,24 @@ impl LumenApp {
         match std::thread::Builder::new()
             .name("image-loader".to_owned())
             .spawn(move || {
-                let path = path.or_else(|| {
-                    let mut dialog = rfd::FileDialog::new()
-                        .set_title("Open image")
-                        .add_filter("Images", &["jpg", "jpeg", "png", "webp"]);
-                    if let Some(directory) = directory {
-                        dialog = dialog.set_directory(directory);
+                let result = match request {
+                    OpenRequest::Pick => {
+                        let mut dialog = rfd::FileDialog::new()
+                            .set_title("Open image")
+                            .add_filter("Images", &["jpg", "jpeg", "png", "webp"]);
+                        if let Some(directory) = directory {
+                            dialog = dialog.set_directory(directory);
+                        }
+                        dialog
+                            .pick_file()
+                            .map(|path| load_selection(path, max_side))
+                            .transpose()
                     }
-                    dialog.pick_file()
-                });
-                let result = path
-                    .map(|path| image_loader::load(&path, max_side))
-                    .transpose();
+                    OpenRequest::File(path) => load_selection(path, max_side).map(Some),
+                    OpenRequest::Navigate(folder, direction) => {
+                        load_neighbor(folder, direction, max_side).map(Some)
+                    }
+                };
                 let _ = sender.send(result);
                 ctx.request_repaint();
             }) {
@@ -80,7 +147,10 @@ impl LumenApp {
         };
         self.pending = None;
         match result {
-            Ok(Some(loaded)) => {
+            Ok(Some(opened)) => {
+                let loaded = opened.image;
+                self.folder = Some(opened.folder);
+                self.error = opened.notice;
                 let title = format!(
                     "{} — Lumen",
                     loaded
@@ -120,11 +190,20 @@ impl eframe::App for LumenApp {
             self.open(&ctx, Some(path));
         } else if shortcut {
             self.open(&ctx, None);
+        } else {
+            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft))
+            {
+                self.navigate(&ctx, Direction::Previous);
+            } else if ctx
+                .input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight))
+            {
+                self.navigate(&ctx, Direction::Next);
+            }
         }
 
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.add_space(6.0);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label(egui::RichText::new("Lumen").strong());
                 ui.separator();
                 if ui
@@ -133,6 +212,35 @@ impl eframe::App for LumenApp {
                     .clicked()
                 {
                     self.open(&ctx, None);
+                }
+                let ready = self.pending.is_none();
+                let previous = ready
+                    && self
+                        .folder
+                        .as_ref()
+                        .is_some_and(|folder| folder.neighbor(Direction::Previous).is_some());
+                let next = ready
+                    && self
+                        .folder
+                        .as_ref()
+                        .is_some_and(|folder| folder.neighbor(Direction::Next).is_some());
+                if ui
+                    .add_enabled(previous, egui::Button::new("Previous"))
+                    .on_hover_text("Left arrow")
+                    .clicked()
+                {
+                    self.navigate(&ctx, Direction::Previous);
+                }
+                if ui
+                    .add_enabled(next, egui::Button::new("Next"))
+                    .on_hover_text("Right arrow")
+                    .clicked()
+                {
+                    self.navigate(&ctx, Direction::Next);
+                }
+                if let Some(folder) = &self.folder {
+                    let (position, count) = folder.position();
+                    ui.weak(format!("{position} / {count}"));
                 }
                 if self.pending.is_some() {
                     ui.spinner();
@@ -233,5 +341,49 @@ impl eframe::App for LumenApp {
                 muted,
             );
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn save_image(path: &std::path::Path) {
+        image::RgbaImage::from_pixel(3, 2, image::Rgba([100, 150, 200, 255]))
+            .save(path)
+            .unwrap();
+    }
+
+    #[test]
+    fn skips_broken_and_deleted_neighbors_in_both_directions() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = directory.path().join("photo1.png");
+        let last = directory.path().join("photo3.png");
+        save_image(&first);
+        std::fs::write(directory.path().join("photo2.png"), b"broken").unwrap();
+        save_image(&last);
+        let opened = load_selection(first.clone(), 1024).unwrap();
+        let next = load_neighbor(opened.folder, Direction::Next, 1024).unwrap();
+        assert_eq!(next.image.path.file_name().unwrap(), "photo3.png");
+        assert_eq!(next.folder.position(), (3, 3));
+        assert!(next.notice.is_some());
+        let previous = load_neighbor(next.folder.clone(), Direction::Previous, 1024).unwrap();
+        assert_eq!(previous.image.path.file_name().unwrap(), "photo1.png");
+        std::fs::remove_file(first).unwrap();
+        assert!(load_neighbor(next.folder, Direction::Previous, 1024).is_err());
+    }
+
+    #[test]
+    fn opening_another_folder_replaces_the_navigation_list() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        save_image(&first.path().join("one.png"));
+        save_image(&first.path().join("two.png"));
+        save_image(&second.path().join("other.png"));
+        let opened = load_selection(first.path().join("one.png"), 1024).unwrap();
+        assert_eq!(opened.folder.position(), (1, 2));
+        let opened = load_selection(second.path().join("other.png"), 1024).unwrap();
+        assert_eq!(opened.folder.position(), (1, 1));
+        assert!(opened.folder.neighbor(Direction::Next).is_none());
     }
 }

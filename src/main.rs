@@ -2,6 +2,7 @@
 
 mod app;
 mod image_loader;
+mod navigation;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
