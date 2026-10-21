@@ -37,6 +37,20 @@ Create an optimized release build with `cargo build --release --locked`. The exe
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and validation guidelines.
 Editable icon masters and their Windows exports are in [assets/](assets/README.md).
 
+### Loading benchmarks
+
+Run `cargo bench --locked --bench loading` to measure the image loader and folder
+scanner in an optimized build. The benchmark uses temporary synthetic 4K JPEG,
+PNG, and WebP images, a 24-megapixel JPEG, and a folder containing 1,000 image
+entries and 10,000 unrelated files. Temporary fixtures are removed after the run.
+
+Each case reports the median and range of five samples after one warm-up. Fixture
+creation and encoding are excluded from the measured operations. Results include
+image decoding and conversion to display pixels, plus preview resizing when
+needed. They do not measure application startup, GPU upload, or input-to-display
+latency. The filesystem cache is warm; compare results on the same machine and
+avoid treating synthetic-image timings as guarantees for real photos.
+
 ## Packaging
 
 After building a release, create a portable ZIP with PowerShell 7:
