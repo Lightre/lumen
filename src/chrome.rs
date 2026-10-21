@@ -55,6 +55,8 @@ pub enum Icon {
     Next,
     Minus,
     Plus,
+    RotateLeft,
+    RotateRight,
     FullScreen,
 }
 
@@ -100,6 +102,23 @@ pub fn icon_button(ui: &mut egui::Ui, icon: Icon, label: &str, enabled: bool) ->
                     line(point(x * 6.0, y * 2.0), point(x * 6.0, y * 6.0));
                     line(point(x * 6.0, y * 6.0), point(x * 2.0, y * 6.0));
                 }
+            }
+            Icon::RotateLeft | Icon::RotateRight => {
+                let direction = if matches!(icon, Icon::RotateRight) {
+                    1.0
+                } else {
+                    -1.0
+                };
+                let arc: Vec<_> = (0..=20)
+                    .map(|index| {
+                        let angle = -std::f32::consts::FRAC_PI_2
+                            - index as f32 / 20.0 * std::f32::consts::PI * 1.5;
+                        point(direction * angle.cos() * 6.0, angle.sin() * 6.0)
+                    })
+                    .collect();
+                ui.painter().add(egui::Shape::line(arc, stroke));
+                line(point(0.0, -6.0), point(direction * -3.5, -9.0));
+                line(point(0.0, -6.0), point(direction * -3.5, -2.5));
             }
         }
         response.on_hover_text(label)

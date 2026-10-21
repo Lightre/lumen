@@ -72,6 +72,7 @@ Left / Right: previous / next image
 Mouse wheel: zoom around the pointer
 Left mouse drag: pan a zoomed image
 Home: fit to window
+R / Shift+R: rotate right / left (view only)
 Double-click: toggle Fit / 100%
 F11: toggle full screen
 Esc: exit full screen
