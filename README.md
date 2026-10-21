@@ -1,69 +1,58 @@
-# Lumen
+<p align="center">
+  <img src="assets/readme/banner.svg" alt="Lumen — a minimal photo viewer for Windows" width="880">
+</p>
 
-A minimal photo viewer for Windows, built with Rust.
+<p align="center">
+  <a href="https://github.com/Lightre/lumen/actions/workflows/ci.yml"><img src="https://github.com/Lightre/lumen/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+  <img src="assets/readme/windows.svg" alt="Windows x64" height="24">
+  <a href="LICENSE"><img src="assets/readme/license.svg" alt="GPLv3 only" height="24"></a>
+</p>
 
-## Status
+Lumen is a small, dark-themed photo viewer built with Rust. Open a photo, move
+through its folder, and focus on the image.
 
-Early development. Open JPEG, PNG, and WebP images in a resizable, dark-themed window. Images fit within the window while preserving their aspect ratio.
+**Early development · Windows only · JPEG, PNG, and WebP**
 
-## Usage
+## Features
 
-- Click **Open image** or press **Ctrl+O** to select a photo.
-- Launch `lumen.exe "C:\Photos\example.jpg"`, drop a photo onto the executable in Explorer, or select the executable through Windows **Open with**. Only the first file argument is opened; without an argument, Lumen starts with an empty view. Paths containing spaces must be quoted when launching from a terminal.
-- Drop an image file onto the window to open it. When dropping multiple files, only the first is opened.
-- Use **Previous** / **Next** or the **Left** / **Right** arrow keys to navigate the current folder. Files are sorted naturally by name (`photo1`, `photo2`, `photo10`), ignoring case.
-- Navigation stops at the first and last file. Unreadable images are skipped, and the counter includes all matching files, including unreadable ones. The folder list refreshes when an image is opened explicitly; new files added afterward appear on the next explicit open.
-- The status bar shows the file name and image dimensions. Cancelling a selection or failing to open a new file preserves the current image.
-- Scroll over the image area to zoom around the pointer, or use the **−** / **+** buttons. Drag with the left mouse button to pan when the image exceeds the view.
-- **Fit** or **Home** resets the view. **100%** maps one source image pixel to one physical screen pixel, accounting for display scaling. Double-click the image area to toggle between Fit and 100%.
-- Use **Full screen** or **F11** for a view without toolbars. **Esc** or **F11** exits full screen. Folder navigation, zoom, and pan remain available in full screen.
-- Opening another image resets zoom and pan to Fit. Zoom is limited to 1600%; the minimum is 1% or the fit scale, whichever is smaller. Fit never enlarges images beyond 100%.
+- Open photos with a file picker, drag and drop, or Windows **Open with**.
+- Browse the current folder in natural filename order.
+- Fit, zoom, and pan, with a pixel-accurate 100% view and full screen.
+- Load images in the background and respect JPEG orientation metadata.
 
-Images load in the background. Only one open operation runs at a time. The current limits are 256 MiB per file and 32 megapixels per image, with additional decoder resource limits. Images that exceed the display texture limit use a reduced preview, indicated in the status bar; zooming does not restore detail removed from that preview. Animated images and color profile management are not supported yet.
+## Try it
 
-## Development
+Development builds are available through **[Actions → Windows Package](https://github.com/Lightre/lumen/actions/workflows/package-windows.yml)**.
+Select a successful run, download its artifact, and extract the ZIP before
+running `lumen.exe`. Artifacts require repository access and expire after seven
+days. There is no stable release or installer yet.
 
-Requires stable Rust with the MSVC toolchain and Windows C++ build tools, including
-the Windows SDK resource compiler for the application icon and version information.
+To run from source, install stable Rust with the MSVC toolchain and the Windows
+C++ build tools, including the Windows SDK, then run:
 
 ```powershell
 cargo run --locked
 ```
 
-Pass a photo path during development with `cargo run --locked -- "C:\Photos\example.jpg"`.
+## Controls
 
-Create an optimized release build with `cargo build --release --locked`. The executable is written to `target/release/lumen.exe`. Release builds run without a console window. No installer or automatic file association registration is included.
+**Ctrl+O** opens a photo. **Left / Right** moves through the folder.
+Scroll to zoom and drag to pan. **Home** fits the image; **F11** toggles full screen.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and validation guidelines.
-Editable icon masters and their Windows exports are in [assets/](assets/README.md).
+See the [usage guide](docs/usage.md) for all controls and current limits.
+Animated images and color profile management are not supported yet.
 
-### Loading benchmarks
+## Project
 
-Run `cargo bench --locked --bench loading` to measure the image loader and folder
-scanner in an optimized build. The benchmark uses temporary synthetic 4K JPEG,
-PNG, and WebP images, a 24-megapixel JPEG, and a folder containing 1,000 image
-entries and 10,000 unrelated files. Temporary fixtures are removed after the run.
+[Development and packaging](docs/development.md) ·
+[Contributing](CONTRIBUTING.md) ·
+[Visual assets](assets/README.md)
 
-Each case reports the median and range of five samples after one warm-up. Fixture
-creation and encoding are excluded from the measured operations. Results include
-image decoding and conversion to display pixels, plus preview resizing when
-needed. They do not measure application startup, GPU upload, or input-to-display
-latency. The filesystem cache is warm; compare results on the same machine and
-avoid treating synthetic-image timings as guarantees for real photos.
+## License
 
-## Packaging
+Copyright (C) 2026 Lightre. Lumen's original code, documentation, and artwork are
+licensed under **[GNU GPL version 3 only](LICENSE)** (`GPL-3.0-only`), without warranty.
+Third-party components retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.txt).
+The [branding policy](BRANDING.md) explains use of the Lumen name and logo.
 
-After building a release, create a portable ZIP with PowerShell 7:
-
-```powershell
-./scripts/package-windows.ps1
-```
-
-Packages are written to `target/packages/` and contain `lumen.exe`, a usage guide,
-and `SHA256SUMS`. The script verifies that the input is an x64 Windows GUI executable.
-
-On GitHub, run **Actions → Windows Package → Run workflow** to test, build, and
-package a selected branch. Download the ZIP from the run's Artifacts section and
-extract it before running. Artifacts are retained for seven days. Packaging changes
-also run this workflow on pull requests. These are unsigned development packages;
-the workflow does not create GitHub Releases or register Windows file associations.
+<p align="center"><sub>A little light, one pixel at a time. ✦</sub></p>

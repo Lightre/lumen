@@ -11,6 +11,25 @@ $package = @($metadata.packages | Where-Object { $_.name -eq 'lumen' })
 if ($package.Count -ne 1) { throw 'Expected exactly one Lumen package.' }
 $version = $package[0].version
 $executable = (Resolve-Path -LiteralPath $ExecutablePath).Path
+$legalFiles = @('LICENSE', 'COPYRIGHT', 'BRANDING.md', 'THIRD_PARTY_NOTICES.txt')
+foreach ($legalName in $legalFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $projectRoot $legalName) -PathType Leaf)) {
+        throw "Missing legal notice: $legalName"
+    }
+}
+$lockText = [System.IO.File]::ReadAllText((Join-Path $projectRoot 'Cargo.lock')).Replace("`r`n", "`n")
+$lockBytes = [System.Text.Encoding]::UTF8.GetBytes($lockText)
+$lockHash = [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($lockBytes)).ToLowerInvariant()
+$notices = Get-Content -LiteralPath (Join-Path $projectRoot 'THIRD_PARTY_NOTICES.txt') -Raw
+if (-not $notices.Contains("Cargo.lock SHA-256: $lockHash")) {
+    throw 'Third-party notices are out of date. Run python scripts/update-third-party-notices.py and review the output.'
+}
+$rustRoot = & rustc --print sysroot
+if ($LASTEXITCODE -ne 0) { throw 'Could not locate Rust standard library notices.' }
+$rustNotices = Join-Path $rustRoot 'share/doc/rust/COPYRIGHT-library.html'
+if (-not (Test-Path -LiteralPath $rustNotices -PathType Leaf)) {
+    throw 'Rust standard library notices are missing from the active toolchain.'
+}
 
 $reader = [System.IO.BinaryReader]::new([System.IO.File]::OpenRead($executable))
 try {
@@ -32,6 +51,13 @@ $directory = Join-Path $outputRoot $name
 New-Item -ItemType Directory -Path $directory -Force | Out-Null
 $packagedExe = Join-Path $directory 'lumen.exe'
 Copy-Item -LiteralPath $executable -Destination $packagedExe -Force
+$packagedLegal = foreach ($legalName in $legalFiles) {
+    $destination = Join-Path $directory $legalName
+    Copy-Item -LiteralPath (Join-Path $projectRoot $legalName) -Destination $destination -Force
+    $destination
+}
+$packagedRustNotices = Join-Path $directory 'RUST_STANDARD_LIBRARY_NOTICES.html'
+Copy-Item -LiteralPath $rustNotices -Destination $packagedRustNotices -Force
 $readme = Join-Path $directory 'README.txt'
 @"
 Lumen $version
@@ -55,16 +81,27 @@ This is an early development build. Images are limited to 32 megapixels and
 and color profile management are not supported. No installer or automatic
 file association registration is included.
 
-SHA256SUMS contains checksums for lumen.exe and this README.
+Copyright (C) 2026 Lightre. Lumen is licensed under GNU GPL version 3 only,
+without warranty. See LICENSE and COPYRIGHT. Third-party components retain
+their own licenses; see THIRD_PARTY_NOTICES.txt and RUST_STANDARD_LIBRARY_NOTICES.html.
+See BRANDING.md for the name and logo policy.
+
+Redistributing a binary requires providing the matching Corresponding Source
+as required by GPLv3 section 6. This development package does not include a
+source bundle. A private repository link does not provide source to recipients
+who cannot access it.
+
+SHA256SUMS contains checksums for the executable, this guide, and legal notices.
 "@ | Set-Content -LiteralPath $readme -Encoding utf8
 $checksums = Join-Path $directory 'SHA256SUMS'
-@($packagedExe, $readme) | ForEach-Object {
+$contents = @($packagedExe, $readme) + @($packagedLegal) + @($packagedRustNotices)
+$contents | ForEach-Object {
     $hash = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
     "$hash  $([System.IO.Path]::GetFileName($_))"
 } | Set-Content -LiteralPath $checksums -Encoding ascii
 
 $archive = Join-Path $outputRoot "$name.zip"
-Compress-Archive -LiteralPath @($packagedExe, $readme, $checksums) -DestinationPath $archive -Force
+Compress-Archive -LiteralPath ($contents + @($checksums)) -DestinationPath $archive -Force
 [pscustomobject]@{
     Name = $name
     Directory = $directory
