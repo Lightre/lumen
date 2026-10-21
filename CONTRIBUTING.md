@@ -1,24 +1,24 @@
 # Contributing
 
-## Git and GitHub
+## Workflow
 
-- Keep `main` working.
-- Use a short-lived branch for each meaningful task: `feat/open-image`, `fix/zoom-anchor`, or `chore/ci`.
-- Each commit should contain one logical change. Use concise English titles such as `feat: open local images`.
-- Once the GitHub remote is connected, merge changes through pull requests.
-- PR descriptions should explain the result, validation, and known limitations.
-- Prefer squash merges after checks pass; delete completed branches.
-- Tag releases using versions such as `v0.1.0`. Release packaging will be added later.
-
-The initial setup commit was created directly on `main`. The GitHub remote, branch protection, and automatic merging have not been configured yet.
+- Keep `main` working and submit changes through pull requests.
+- Use short-lived branches such as `feat/open-image`, `fix/zoom-anchor`, or `chore/ci`.
+- Keep commits focused on one logical change, with concise English titles.
+- Describe user-visible changes, validation, and known limitations in pull requests.
+- Prefer squash merges after checks pass and delete completed branches.
+- Use version tags such as `v0.1.0` for releases.
+- Write source code, UI text, documentation, commit messages, and pull requests in English.
 
 ## Validation
 
-Before opening a PR, run `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked`.
-GitHub Actions runs the same checks on Windows. Add meaningful behavior tests as features are implemented; check the graphical interface manually as well.
+Run the following before submitting changes:
 
-## Collaboration
+```powershell
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+```
 
-Start with one agent. Use subagents when requested by the user. Keep tasks small and reviewable. Explain technical decisions and relevant Rust concepts briefly during development.
-
-Keep source code, UI text, documentation, commit messages, and PR content in English. Conversation with the project owner continues in Turkish.
+Windows CI runs the same checks on pull requests and pushes to `main`.
+Add behavior tests where appropriate and manually verify graphical changes.
