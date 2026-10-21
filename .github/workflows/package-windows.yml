@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/package-windows.yml'
       - 'scripts/package-windows.ps1'
+      - 'scripts/package-source.ps1'
       - 'scripts/update-third-party-notices.py'
       - 'LICENSE'
       - 'COPYRIGHT'
@@ -41,6 +42,13 @@ jobs:
           $package = ./scripts/package-windows.ps1 -ExecutablePath ./target/x86_64-pc-windows-msvc/release/lumen.exe
           "name=$($package.Name)" >> $env:GITHUB_OUTPUT
           "directory=$($package.Directory)" >> $env:GITHUB_OUTPUT
+      - name: Package source
+        id: source
+        shell: pwsh
+        run: |
+          $source = ./scripts/package-source.ps1
+          "name=$($source.Name)" >> $env:GITHUB_OUTPUT
+          "archive=$($source.Archive)" >> $env:GITHUB_OUTPUT
       - name: Upload Windows package
         uses: actions/upload-artifact@v7
         with:
@@ -54,5 +62,12 @@ jobs:
             ${{ steps.package.outputs.directory }}/BRANDING.md
             ${{ steps.package.outputs.directory }}/THIRD_PARTY_NOTICES.txt
             ${{ steps.package.outputs.directory }}/RUST_STANDARD_LIBRARY_NOTICES.html
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload matching source
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.source.outputs.name }}
+          path: ${{ steps.source.outputs.archive }}
           if-no-files-found: error
           retention-days: 7

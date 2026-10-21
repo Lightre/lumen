@@ -77,5 +77,35 @@ requirements. When distributing Lumen, provide the matching Corresponding Source
 in a manner permitted by GPLv3 section 6, including the build scripts and required
 dependency sources. Preserve third-party notices and identify modified versions.
 A private repository link is not a source delivery mechanism for recipients who
-cannot access it. The current packaging workflow creates development binaries; it
-does not prepare or publish a Corresponding Source bundle.
+cannot access it.
+
+From a clean checkout, prepare the matching source archive with PowerShell 7:
+
+```powershell
+./scripts/package-source.ps1
+```
+
+The archive is written to `target/packages/lumen-<version>-source.zip`. It contains
+the project files, legal notices, build instructions, source checksums, the Git
+revision and tool versions, and all locked dependency sources produced by
+`cargo vendor`. `.cargo/config.toml` selects these bundled sources. Git metadata,
+ignored files, and local agent guidance are excluded. `-AllowDirty` is available
+for local verification; such archives explicitly record that local changes were
+included and must not be presented as a clean release revision.
+
+Extract the archive and, from its root, verify a build without dependency downloads:
+
+```powershell
+cargo build --release --frozen --target x86_64-pc-windows-msvc
+```
+
+`--frozen` combines `--locked` and `--offline`. Rust and the Windows C++ build tools
+must already be installed. Use the recorded Rust version when reproducing a build;
+the archive does not promise byte-for-byte reproducibility.
+
+The Windows Package workflow uploads the Windows and source packages as separate
+artifacts with the same retention period. Build and package both from the same
+clean revision and toolchain. When distributing, make both available together
+with equivalent access; do not rely on an expired Actions artifact or GitHub's
+automatic source ZIP, which does not contain the vendored dependencies. A release
+workflow and permanent downloads are separate from this development packaging step.

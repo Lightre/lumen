@@ -87,10 +87,10 @@ without warranty. See LICENSE and COPYRIGHT. Third-party components retain
 their own licenses; see THIRD_PARTY_NOTICES.txt and RUST_STANDARD_LIBRARY_NOTICES.html.
 See BRANDING.md for the name and logo policy.
 
-Redistributing a binary requires providing the matching Corresponding Source
-as required by GPLv3 section 6. This development package does not include a
-source bundle. A private repository link does not provide source to recipients
-who cannot access it.
+The matching source archive is lumen-$version-source.zip, supplied separately
+alongside this package. Redistribute both with equivalent access, as required
+by GPLv3 section 6. The source archive includes build instructions and locked
+dependency sources. A private repository link alone is not source delivery.
 
 SHA256SUMS contains checksums for the executable, this guide, and legal notices.
 "@ | Set-Content -LiteralPath $readme -Encoding utf8
