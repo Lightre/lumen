@@ -8,6 +8,9 @@
 - Describe user-visible changes, validation, and known limitations in pull requests.
 - Prefer squash merges after checks pass and delete completed branches.
 - Use version tags such as `v0.1.0` for releases.
+- Summarize user-visible changes under `Unreleased` in [CHANGELOG.md](CHANGELOG.md).
+- Label feature and fix PRs with `enhancement` or `bug`; use `ignore-for-release`
+  for changes that should be omitted from the generated release notes.
 - Write source code, UI text, documentation, commit messages, and pull requests in English.
 
 ## License
@@ -28,3 +31,5 @@ cargo test --locked
 
 Windows CI runs the same checks on pull requests and pushes to `main`.
 Add behavior tests where appropriate and manually verify graphical changes.
+See [the release guide](docs/development.md#releases) for previewing packages and
+preparing draft releases.
