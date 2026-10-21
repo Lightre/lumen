@@ -132,9 +132,6 @@ impl LumenApp {
             let (position, count) = folder.position();
             ui.weak(format!("{position} / {count}"));
         }
-        if self.pending.is_some() {
-            ui.spinner().on_hover_text("Opening image…");
-        }
     }
 
     fn view_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> Option<f32> {
@@ -159,6 +156,13 @@ impl LumenApp {
             }
             if chrome::icon_button(ui, Icon::Plus, "Zoom in", true).clicked() {
                 zoom_request = Some(1.25);
+            }
+            ui.separator();
+            if chrome::icon_button(ui, Icon::RotateLeft, "Rotate left · Shift+R", true).clicked() {
+                self.view.rotate(false);
+            }
+            if chrome::icon_button(ui, Icon::RotateRight, "Rotate right · R", true).clicked() {
+                self.view.rotate(true);
             }
         });
         ui.separator();
@@ -235,7 +239,7 @@ impl LumenApp {
         self.pending = None;
         match result {
             Ok(Some(opened)) => {
-                self.view.fit();
+                self.view = View::default();
                 let loaded = opened.image;
                 self.folder = Some(opened.folder);
                 self.error = opened.notice;
@@ -280,6 +284,14 @@ impl LumenApp {
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Home)) {
             self.view.fit();
         }
+        if self.image.is_some() {
+            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::SHIFT, egui::Key::R)) {
+                self.view.rotate(false);
+            } else if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::R))
+            {
+                self.view.rotate(true);
+            }
+        }
         let mut zoom_request = None;
         let shortcut =
             ctx.input_mut(|input| input.consume_key(egui::Modifiers::CTRL, egui::Key::O));
@@ -306,7 +318,7 @@ impl LumenApp {
         }
 
         if !fullscreen {
-            let narrow = ui.available_width() < 620.0;
+            let narrow = ui.available_width() < 760.0;
             egui::Panel::top("toolbar")
                 .resizable(false)
                 .exact_size(if narrow { 96.0 } else { 56.0 })
@@ -316,17 +328,30 @@ impl LumenApp {
                         .inner_margin(egui::Margin::symmetric(12, 8)),
                 )
                 .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        self.navigation_controls(ui, &ctx);
-                        if !narrow {
-                            ui.separator();
-                            zoom_request = self.view_controls(ui, &ctx);
+                    let content = ui.max_rect();
+                    let mut controls = content;
+                    controls.max.x -= 32.0;
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(controls), |ui| {
+                        ui.horizontal(|ui| {
+                            self.navigation_controls(ui, &ctx);
+                            if !narrow {
+                                ui.separator();
+                                zoom_request = self.view_controls(ui, &ctx);
+                            }
+                        });
+                        if narrow {
+                            ui.horizontal(|ui| {
+                                zoom_request = self.view_controls(ui, &ctx);
+                            });
                         }
                     });
-                    if narrow {
-                        ui.horizontal(|ui| {
-                            zoom_request = self.view_controls(ui, &ctx);
-                        });
+                    if self.pending.is_some() {
+                        let indicator = egui::Rect::from_center_size(
+                            egui::pos2(content.right() - 12.0, content.top() + 17.0),
+                            egui::vec2(16.0, 16.0),
+                        );
+                        ui.put(indicator, egui::Spinner::new().size(16.0))
+                            .on_hover_text("Opening image…");
                     }
                 });
         }
@@ -458,12 +483,7 @@ impl LumenApp {
                     }
                     let rect = self.view.rect(bounds, source, pixels_per_point);
                     let painter = ui.painter().with_clip_rect(bounds);
-                    painter.image(
-                        image.texture.id(),
-                        rect,
-                        egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                        egui::Color32::WHITE,
-                    );
+                    painter.add(self.view.mesh(image.texture.id(), rect));
                     if !fullscreen {
                         let zoom = self.view.scale(bounds, source, pixels_per_point) * 100.0;
                         let label = painter.layout_no_wrap(
@@ -544,14 +564,16 @@ mod tests {
         shape: &egui::epaint::Shape,
         clip: egui::Rect,
         metadata_seen: &mut bool,
+        positions: &mut Vec<egui::Rect>,
     ) {
         match shape {
             egui::epaint::Shape::Vec(shapes) => {
                 for shape in shapes {
-                    assert_visible_shapes(shape, clip, metadata_seen);
+                    assert_visible_shapes(shape, clip, metadata_seen, positions);
                 }
             }
             egui::epaint::Shape::Text(text) => {
+                positions.push(shape.visual_bounding_rect());
                 let label = text.galley.text();
                 if label.starts_with("3840 × 2160") {
                     *metadata_seen = true;
@@ -563,6 +585,7 @@ mod tests {
                 );
             }
             egui::epaint::Shape::LineSegment { .. } => {
+                positions.push(shape.visual_bounding_rect());
                 assert!(
                     clip.expand(2.0).contains_rect(shape.visual_bounding_rect()),
                     "Clipped toolbar stroke: {:?} outside {clip:?}",
@@ -606,25 +629,49 @@ mod tests {
         for size in [
             egui::vec2(480.0, 360.0),
             egui::vec2(620.0, 560.0),
+            egui::vec2(759.0, 560.0),
+            egui::vec2(760.0, 560.0),
             egui::vec2(800.0, 560.0),
             egui::vec2(1100.0, 740.0),
             egui::vec2(480.0, 360.0),
         ] {
-            for _ in 0..3 {
-                let mut output = ctx.run_ui(
-                    egui::RawInput {
-                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                        ..Default::default()
-                    },
-                    |ui| app.show(ui),
-                );
-                output.textures_delta.clear();
-                let mut metadata_seen = false;
-                for clipped in &output.shapes {
-                    assert_visible_shapes(&clipped.shape, clipped.clip_rect, &mut metadata_seen);
+            let mut idle_positions = None;
+            for loading in [false, true, false] {
+                let (_sender, receiver) = mpsc::channel();
+                app.pending = loading.then_some(receiver);
+                for pass in 0..3 {
+                    let mut output = ctx.run_ui(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                            ..Default::default()
+                        },
+                        |ui| app.show(ui),
+                    );
+                    output.textures_delta.clear();
+                    let mut metadata_seen = false;
+                    let mut positions = Vec::new();
+                    for clipped in &output.shapes {
+                        assert_visible_shapes(
+                            &clipped.shape,
+                            clipped.clip_rect,
+                            &mut metadata_seen,
+                            &mut positions,
+                        );
+                    }
+                    assert!(metadata_seen, "Image metadata was not painted at {size:?}");
+                    if pass == 2 {
+                        if let Some(idle) = &idle_positions {
+                            assert_eq!(
+                                &positions, idle,
+                                "Controls moved when loading={loading} at {size:?}"
+                            );
+                        } else {
+                            idle_positions = Some(positions);
+                        }
+                    }
                 }
-                assert!(metadata_seen, "Image metadata was not painted at {size:?}");
             }
+            app.view.rotate(true);
         }
     }
 
@@ -632,6 +679,32 @@ mod tests {
         image::RgbaImage::from_pixel(3, 2, image::Rgba([100, 150, 200, 255]))
             .save(path)
             .unwrap();
+    }
+
+    #[test]
+    fn successful_open_resets_rotation_but_failed_open_preserves_it() {
+        let ctx = egui::Context::default();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("photo.png");
+        save_image(&path);
+        let mut app = LumenApp::default();
+        let deliver = |app: &mut LumenApp, result: LoadResult| {
+            let (sender, receiver) = mpsc::channel();
+            sender.send(result).unwrap();
+            app.pending = Some(receiver);
+            app.finish_loading(&ctx);
+        };
+        deliver(&mut app, load_selection(path.clone(), 1024).map(Some));
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(3.0, 2.0));
+        let texture = egui::TextureId::Managed(1);
+        let original = app.view.mesh(texture, rect);
+        app.view.rotate(true);
+        let rotated = app.view.mesh(texture, rect);
+        assert_ne!(rotated, original);
+        deliver(&mut app, Err("Unreadable file".to_owned()));
+        assert_eq!(app.view.mesh(texture, rect), rotated);
+        deliver(&mut app, load_selection(path, 1024).map(Some));
+        assert_eq!(app.view.mesh(texture, rect), original);
     }
 
     #[test]

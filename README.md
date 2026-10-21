@@ -17,7 +17,7 @@ through its folder, and focus on the image.
 
 - Open photos with a file picker, drag and drop, or Windows **Open with**.
 - Browse the current folder in natural filename order.
-- Fit, zoom, and pan, with a pixel-accurate 100% view and full screen.
+- Rotate, fit, zoom, and pan, with a pixel-accurate 100% view and full screen.
 - Load images in the background and respect JPEG orientation metadata.
 
 ## Try it
