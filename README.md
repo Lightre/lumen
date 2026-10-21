@@ -9,6 +9,7 @@ Early development. Open JPEG, PNG, and WebP images in a resizable, dark-themed w
 ## Usage
 
 - Click **Open image** or press **Ctrl+O** to select a photo.
+- Launch `lumen.exe "C:\Photos\example.jpg"`, drop a photo onto the executable in Explorer, or select the executable through Windows **Open with**. Only the first file argument is opened; without an argument, Lumen starts with an empty view. Paths containing spaces must be quoted when launching from a terminal.
 - Drop an image file onto the window to open it. When dropping multiple files, only the first is opened.
 - Use **Previous** / **Next** or the **Left** / **Right** arrow keys to navigate the current folder. Files are sorted naturally by name (`photo1`, `photo2`, `photo10`), ignoring case.
 - Navigation stops at the first and last file. Unreadable images are skipped, and the counter includes all matching files, including unreadable ones. The folder list refreshes when an image is opened explicitly; new files added afterward appear on the next explicit open.
@@ -28,6 +29,8 @@ Requires stable Rust with the MSVC toolchain and Windows C++ build tools.
 cargo run --locked
 ```
 
-Create a release build with `cargo build --release`. The executable is written to `target/release/lumen.exe`.
+Pass a photo path during development with `cargo run --locked -- "C:\Photos\example.jpg"`.
+
+Create an optimized release build with `cargo build --release --locked`. The executable is written to `target/release/lumen.exe`. Release builds run without a console window. No installer or automatic file association registration is included.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and validation guidelines.
