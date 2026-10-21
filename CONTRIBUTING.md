@@ -10,7 +10,7 @@
 - Prefer squash merges after checks pass; delete completed branches.
 - Tag releases using versions such as `v0.1.0`. Release packaging will be added later.
 
-The initial setup commit was created directly on `main`. The GitHub remote, branch protection, and automatic merging have not been configured yet.
+The initial setup commits were created directly on `main`. The private GitHub remote is connected, and Windows CI runs on pushes to `main` and on pull requests. Future changes should use feature branches and pull requests. Branch protection and automatic merging have not been configured.
 
 ## Validation
 
