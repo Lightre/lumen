@@ -104,6 +104,77 @@ impl LumenApp {
         }
     }
 
+    fn navigation_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        if chrome::open_button(ui, self.pending.is_none()).clicked() {
+            self.open(ctx, None);
+        }
+        ui.add_space(4.0);
+        let ready = self.pending.is_none();
+        let previous = ready
+            && self
+                .folder
+                .as_ref()
+                .is_some_and(|folder| folder.neighbor(Direction::Previous).is_some());
+        let next = ready
+            && self
+                .folder
+                .as_ref()
+                .is_some_and(|folder| folder.neighbor(Direction::Next).is_some());
+        if chrome::icon_button(ui, Icon::Previous, "Previous image · Left arrow", previous)
+            .clicked()
+        {
+            self.navigate(ctx, Direction::Previous);
+        }
+        if chrome::icon_button(ui, Icon::Next, "Next image · Right arrow", next).clicked() {
+            self.navigate(ctx, Direction::Next);
+        }
+        if let Some(folder) = &self.folder {
+            let (position, count) = folder.position();
+            ui.weak(format!("{position} / {count}"));
+        }
+        if self.pending.is_some() {
+            ui.spinner().on_hover_text("Opening image…");
+        }
+    }
+
+    fn view_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> Option<f32> {
+        let mut zoom_request = None;
+        ui.add_enabled_ui(self.image.is_some(), |ui| {
+            if ui
+                .selectable_label(self.view.is_fit(), "Fit")
+                .on_hover_text("Fit to window · Home")
+                .clicked()
+            {
+                self.view.fit();
+            }
+            if ui
+                .button("100%")
+                .on_hover_text("One image pixel per screen pixel")
+                .clicked()
+            {
+                self.view.actual_size();
+            }
+            if chrome::icon_button(ui, Icon::Minus, "Zoom out", true).clicked() {
+                zoom_request = Some(1.0 / 1.25);
+            }
+            if chrome::icon_button(ui, Icon::Plus, "Zoom in", true).clicked() {
+                zoom_request = Some(1.25);
+            }
+        });
+        ui.separator();
+        if chrome::icon_button(
+            ui,
+            Icon::FullScreen,
+            "Full screen · F11 · Esc to exit",
+            true,
+        )
+        .clicked()
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+        }
+        zoom_request
+    }
+
     fn start_loading(&mut self, ctx: &egui::Context, request: OpenRequest) {
         if self.pending.is_some() {
             return;
@@ -190,8 +261,8 @@ impl LumenApp {
     }
 }
 
-impl eframe::App for LumenApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+impl LumenApp {
+    fn show(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.finish_loading(&ctx);
         if let Some(path) = self.startup_path.take() {
@@ -235,98 +306,42 @@ impl eframe::App for LumenApp {
         }
 
         if !fullscreen {
-            let toolbar_height = if ui.available_width() < 620.0 {
-                96.0
-            } else {
-                56.0
-            };
+            let narrow = ui.available_width() < 620.0;
             egui::Panel::top("toolbar")
                 .resizable(false)
-                .exact_size(toolbar_height)
+                .exact_size(if narrow { 96.0 } else { 56.0 })
+                .frame(
+                    egui::Frame::new()
+                        .fill(chrome::SURFACE)
+                        .inner_margin(egui::Margin::symmetric(12, 8)),
+                )
                 .show(ui, |ui| {
-                    ui.add_space(8.0);
-                    ui.horizontal_wrapped(|ui| {
-                        if chrome::open_button(ui, self.pending.is_none()).clicked() {
-                            self.open(&ctx, None);
-                        }
-                        ui.add_space(4.0);
-                        let ready = self.pending.is_none();
-                        let previous = ready
-                            && self.folder.as_ref().is_some_and(|folder| {
-                                folder.neighbor(Direction::Previous).is_some()
-                            });
-                        let next = ready
-                            && self
-                                .folder
-                                .as_ref()
-                                .is_some_and(|folder| folder.neighbor(Direction::Next).is_some());
-                        if chrome::icon_button(
-                            ui,
-                            Icon::Previous,
-                            "Previous image · Left arrow",
-                            previous,
-                        )
-                        .clicked()
-                        {
-                            self.navigate(&ctx, Direction::Previous);
-                        }
-                        if chrome::icon_button(ui, Icon::Next, "Next image · Right arrow", next)
-                            .clicked()
-                        {
-                            self.navigate(&ctx, Direction::Next);
-                        }
-                        if let Some(folder) = &self.folder {
-                            let (position, count) = folder.position();
-                            ui.weak(format!("{position} / {count}"));
-                        }
-                        ui.separator();
-                        ui.add_enabled_ui(self.image.is_some(), |ui| {
-                            if ui
-                                .selectable_label(self.view.is_fit(), "Fit")
-                                .on_hover_text("Fit to window · Home")
-                                .clicked()
-                            {
-                                self.view.fit();
-                            }
-                            if ui
-                                .button("100%")
-                                .on_hover_text("One image pixel per screen pixel")
-                                .clicked()
-                            {
-                                self.view.actual_size();
-                            }
-                            if chrome::icon_button(ui, Icon::Minus, "Zoom out", true).clicked() {
-                                zoom_request = Some(1.0 / 1.25);
-                            }
-                            if chrome::icon_button(ui, Icon::Plus, "Zoom in", true).clicked() {
-                                zoom_request = Some(1.25);
-                            }
-                        });
-                        ui.separator();
-                        if chrome::icon_button(
-                            ui,
-                            Icon::FullScreen,
-                            "Full screen · F11 · Esc to exit",
-                            true,
-                        )
-                        .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
-                        }
-                        if self.pending.is_some() {
-                            ui.spinner().on_hover_text("Opening image…");
+                    ui.horizontal(|ui| {
+                        self.navigation_controls(ui, &ctx);
+                        if !narrow {
+                            ui.separator();
+                            zoom_request = self.view_controls(ui, &ctx);
                         }
                     });
-                    ui.add_space(8.0);
+                    if narrow {
+                        ui.horizontal(|ui| {
+                            zoom_request = self.view_controls(ui, &ctx);
+                        });
+                    }
                 });
         }
 
         if !fullscreen || self.error.is_some() {
             egui::Panel::bottom("status")
                 .resizable(false)
-                .exact_size(if self.error.is_some() { 80.0 } else { 32.0 })
+                .exact_size(if self.error.is_some() { 80.0 } else { 36.0 })
+                .frame(
+                    egui::Frame::new()
+                        .fill(chrome::SURFACE)
+                        .inner_margin(egui::Margin::symmetric(12, 6)),
+                )
                 .show(ui, |ui| {
-                    ui.add_space(3.0);
+                    ui.spacing_mut().interact_size.y = 20.0;
                     if let Some(error) = self.error.clone() {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(
@@ -381,7 +396,6 @@ impl eframe::App for LumenApp {
                                 .color(chrome::MUTED),
                         );
                     }
-                    ui.add_space(3.0);
                 });
         }
 
@@ -516,9 +530,103 @@ impl eframe::App for LumenApp {
     }
 }
 
+impl eframe::App for LumenApp {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.show(ui);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_visible_shapes(
+        shape: &egui::epaint::Shape,
+        clip: egui::Rect,
+        metadata_seen: &mut bool,
+    ) {
+        match shape {
+            egui::epaint::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    assert_visible_shapes(shape, clip, metadata_seen);
+                }
+            }
+            egui::epaint::Shape::Text(text) => {
+                let label = text.galley.text();
+                if label.starts_with("3840 × 2160") {
+                    *metadata_seen = true;
+                }
+                assert!(
+                    clip.expand(2.0).contains_rect(shape.visual_bounding_rect()),
+                    "Clipped text {label:?}: {:?} outside {clip:?}",
+                    shape.visual_bounding_rect()
+                );
+            }
+            egui::epaint::Shape::LineSegment { .. } => {
+                assert!(
+                    clip.expand(2.0).contains_rect(shape.visual_bounding_rect()),
+                    "Clipped toolbar stroke: {:?} outside {clip:?}",
+                    shape.visual_bounding_rect()
+                );
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn loaded_image_controls_and_metadata_remain_visible_when_resizing() {
+        let ctx = egui::Context::default();
+        chrome::configure(&ctx);
+        let directory = tempfile::tempdir().unwrap();
+        let name = "a-long-photo-name-that-must-truncate-without-moving-the-metadata-2.jpg";
+        let path = directory.path().join(name);
+        for index in 1..=7 {
+            std::fs::write(
+                directory
+                    .path()
+                    .join(name.replace("-2.jpg", &format!("-{index}.jpg"))),
+                [],
+            )
+            .unwrap();
+        }
+        let mut app = LumenApp {
+            image: Some(DisplayedImage {
+                texture: ctx.load_texture(
+                    "layout-fixture",
+                    egui::ColorImage::filled([2, 2], egui::Color32::WHITE),
+                    egui::TextureOptions::LINEAR,
+                ),
+                path: path.clone(),
+                dimensions: [3840, 2160],
+                reduced: true,
+            }),
+            folder: Some(Folder::scan(&path).unwrap()),
+            ..Default::default()
+        };
+        for size in [
+            egui::vec2(480.0, 360.0),
+            egui::vec2(620.0, 560.0),
+            egui::vec2(800.0, 560.0),
+            egui::vec2(1100.0, 740.0),
+            egui::vec2(480.0, 360.0),
+        ] {
+            for _ in 0..3 {
+                let mut output = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                        ..Default::default()
+                    },
+                    |ui| app.show(ui),
+                );
+                output.textures_delta.clear();
+                let mut metadata_seen = false;
+                for clipped in &output.shapes {
+                    assert_visible_shapes(&clipped.shape, clipped.clip_rect, &mut metadata_seen);
+                }
+                assert!(metadata_seen, "Image metadata was not painted at {size:?}");
+            }
+        }
+    }
 
     fn save_image(path: &std::path::Path) {
         image::RgbaImage::from_pixel(3, 2, image::Rgba([100, 150, 200, 255]))
