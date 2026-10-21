@@ -23,7 +23,8 @@ Images load in the background. Only one open operation runs at a time. The curre
 
 ## Development
 
-Requires stable Rust with the MSVC toolchain and Windows C++ build tools.
+Requires stable Rust with the MSVC toolchain and Windows C++ build tools, including
+the Windows SDK resource compiler for the application icon and version information.
 
 ```powershell
 cargo run --locked
@@ -34,6 +35,7 @@ Pass a photo path during development with `cargo run --locked -- "C:\Photos\exam
 Create an optimized release build with `cargo build --release --locked`. The executable is written to `target/release/lumen.exe`. Release builds run without a console window. No installer or automatic file association registration is included.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and validation guidelines.
+Editable icon masters and their Windows exports are in [assets/](assets/README.md).
 
 ## Packaging
 
