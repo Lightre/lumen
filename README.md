@@ -34,3 +34,20 @@ Pass a photo path during development with `cargo run --locked -- "C:\Photos\exam
 Create an optimized release build with `cargo build --release --locked`. The executable is written to `target/release/lumen.exe`. Release builds run without a console window. No installer or automatic file association registration is included.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and validation guidelines.
+
+## Packaging
+
+After building a release, create a portable ZIP with PowerShell 7:
+
+```powershell
+./scripts/package-windows.ps1
+```
+
+Packages are written to `target/packages/` and contain `lumen.exe`, a usage guide,
+and `SHA256SUMS`. The script verifies that the input is an x64 Windows GUI executable.
+
+On GitHub, run **Actions → Windows Package → Run workflow** to test, build, and
+package a selected branch. Download the ZIP from the run's Artifacts section and
+extract it before running. Artifacts are retained for seven days. Packaging changes
+also run this workflow on pull requests. These are unsigned development packages;
+the workflow does not create GitHub Releases or register Windows file associations.
