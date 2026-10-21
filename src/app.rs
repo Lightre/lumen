@@ -2,6 +2,7 @@ use eframe::egui;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
+use crate::chrome::{self, Icon};
 use crate::image_loader::{self, LoadedImage};
 use crate::navigation::{Direction, Folder};
 use crate::view::View;
@@ -68,16 +69,25 @@ pub struct LumenApp {
     error: Option<String>,
     view: View,
     startup_path: Option<PathBuf>,
+    brand: Option<egui::TextureHandle>,
 }
 
 impl LumenApp {
     pub fn new(cc: &eframe::CreationContext<'_>, startup_path: Option<PathBuf>) -> Self {
-        let mut visuals = egui::Visuals::dark();
-        visuals.panel_fill = egui::Color32::from_rgb(22, 23, 26);
-        visuals.window_fill = visuals.panel_fill;
-        cc.egui_ctx.set_visuals(visuals);
+        chrome::configure(&cc.egui_ctx);
+        let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
+            .expect("The embedded brand asset must be valid");
+        let brand = cc.egui_ctx.load_texture(
+            "lumen-brand",
+            egui::ColorImage::from_rgba_unmultiplied(
+                [icon.width as usize, icon.height as usize],
+                &icon.rgba,
+            ),
+            egui::TextureOptions::LINEAR,
+        );
         Self {
             startup_path,
+            brand: Some(brand),
             ..Self::default()
         }
     }
@@ -92,6 +102,77 @@ impl LumenApp {
         {
             self.start_loading(ctx, OpenRequest::Navigate(folder.clone(), direction));
         }
+    }
+
+    fn navigation_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        if chrome::open_button(ui, self.pending.is_none()).clicked() {
+            self.open(ctx, None);
+        }
+        ui.add_space(4.0);
+        let ready = self.pending.is_none();
+        let previous = ready
+            && self
+                .folder
+                .as_ref()
+                .is_some_and(|folder| folder.neighbor(Direction::Previous).is_some());
+        let next = ready
+            && self
+                .folder
+                .as_ref()
+                .is_some_and(|folder| folder.neighbor(Direction::Next).is_some());
+        if chrome::icon_button(ui, Icon::Previous, "Previous image · Left arrow", previous)
+            .clicked()
+        {
+            self.navigate(ctx, Direction::Previous);
+        }
+        if chrome::icon_button(ui, Icon::Next, "Next image · Right arrow", next).clicked() {
+            self.navigate(ctx, Direction::Next);
+        }
+        if let Some(folder) = &self.folder {
+            let (position, count) = folder.position();
+            ui.weak(format!("{position} / {count}"));
+        }
+        if self.pending.is_some() {
+            ui.spinner().on_hover_text("Opening image…");
+        }
+    }
+
+    fn view_controls(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> Option<f32> {
+        let mut zoom_request = None;
+        ui.add_enabled_ui(self.image.is_some(), |ui| {
+            if ui
+                .selectable_label(self.view.is_fit(), "Fit")
+                .on_hover_text("Fit to window · Home")
+                .clicked()
+            {
+                self.view.fit();
+            }
+            if ui
+                .button("100%")
+                .on_hover_text("One image pixel per screen pixel")
+                .clicked()
+            {
+                self.view.actual_size();
+            }
+            if chrome::icon_button(ui, Icon::Minus, "Zoom out", true).clicked() {
+                zoom_request = Some(1.0 / 1.25);
+            }
+            if chrome::icon_button(ui, Icon::Plus, "Zoom in", true).clicked() {
+                zoom_request = Some(1.25);
+            }
+        });
+        ui.separator();
+        if chrome::icon_button(
+            ui,
+            Icon::FullScreen,
+            "Full screen · F11 · Esc to exit",
+            true,
+        )
+        .clicked()
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+        }
+        zoom_request
     }
 
     fn start_loading(&mut self, ctx: &egui::Context, request: OpenRequest) {
@@ -180,8 +261,8 @@ impl LumenApp {
     }
 }
 
-impl eframe::App for LumenApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+impl LumenApp {
+    fn show(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.finish_loading(&ctx);
         if let Some(path) = self.startup_path.take() {
@@ -225,235 +306,327 @@ impl eframe::App for LumenApp {
         }
 
         if !fullscreen {
-            egui::Panel::top("toolbar").show(ui, |ui| {
-                ui.add_space(6.0);
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(egui::RichText::new("Lumen").strong());
-                    ui.separator();
-                    if ui
-                        .add_enabled(self.pending.is_none(), egui::Button::new("Open image"))
-                        .on_hover_text("Ctrl+O")
-                        .clicked()
-                    {
-                        self.open(&ctx, None);
-                    }
-                    let ready = self.pending.is_none();
-                    let previous = ready
-                        && self
-                            .folder
-                            .as_ref()
-                            .is_some_and(|folder| folder.neighbor(Direction::Previous).is_some());
-                    let next = ready
-                        && self
-                            .folder
-                            .as_ref()
-                            .is_some_and(|folder| folder.neighbor(Direction::Next).is_some());
-                    if ui
-                        .add_enabled(previous, egui::Button::new("Previous"))
-                        .on_hover_text("Left arrow")
-                        .clicked()
-                    {
-                        self.navigate(&ctx, Direction::Previous);
-                    }
-                    if ui
-                        .add_enabled(next, egui::Button::new("Next"))
-                        .on_hover_text("Right arrow")
-                        .clicked()
-                    {
-                        self.navigate(&ctx, Direction::Next);
-                    }
-                    if let Some(folder) = &self.folder {
-                        let (position, count) = folder.position();
-                        ui.weak(format!("{position} / {count}"));
-                    }
-                    ui.separator();
-                    ui.add_enabled_ui(self.image.is_some(), |ui| {
-                        if ui
-                            .selectable_label(self.view.is_fit(), "Fit")
-                            .on_hover_text("Fit to window · Home")
-                            .clicked()
-                        {
-                            self.view.fit();
-                        }
-                        if ui
-                            .button("100%")
-                            .on_hover_text("One image pixel per screen pixel")
-                            .clicked()
-                        {
-                            self.view.actual_size();
-                        }
-                        if ui.button("−").on_hover_text("Zoom out").clicked() {
-                            zoom_request = Some(1.0 / 1.25);
-                        }
-                        if ui.button("+").on_hover_text("Zoom in").clicked() {
-                            zoom_request = Some(1.25);
+            let narrow = ui.available_width() < 620.0;
+            egui::Panel::top("toolbar")
+                .resizable(false)
+                .exact_size(if narrow { 96.0 } else { 56.0 })
+                .frame(
+                    egui::Frame::new()
+                        .fill(chrome::SURFACE)
+                        .inner_margin(egui::Margin::symmetric(12, 8)),
+                )
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        self.navigation_controls(ui, &ctx);
+                        if !narrow {
+                            ui.separator();
+                            zoom_request = self.view_controls(ui, &ctx);
                         }
                     });
-                    if ui
-                        .button("Full screen")
-                        .on_hover_text("F11 · Esc to exit")
-                        .clicked()
-                    {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
-                    }
-                    if self.pending.is_some() {
-                        ui.spinner();
-                        ui.weak("Opening image…");
+                    if narrow {
+                        ui.horizontal(|ui| {
+                            zoom_request = self.view_controls(ui, &ctx);
+                        });
                     }
                 });
-                ui.add_space(6.0);
-            });
         }
 
         if !fullscreen || self.error.is_some() {
-            egui::Panel::bottom("status").show(ui, |ui| {
-                if let Some(error) = self.error.clone() {
-                    ui.horizontal_wrapped(|ui| {
+            egui::Panel::bottom("status")
+                .resizable(false)
+                .exact_size(if self.error.is_some() { 80.0 } else { 36.0 })
+                .frame(
+                    egui::Frame::new()
+                        .fill(chrome::SURFACE)
+                        .inner_margin(egui::Margin::symmetric(12, 6)),
+                )
+                .show(ui, |ui| {
+                    ui.spacing_mut().interact_size.y = 20.0;
+                    if let Some(error) = self.error.clone() {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(
+                                egui::RichText::new(error)
+                                    .color(egui::Color32::from_rgb(245, 160, 150)),
+                            );
+                            if ui.small_button("Dismiss").clicked() {
+                                self.error = None;
+                            }
+                        });
+                    }
+                    if let Some(image) = &self.image {
+                        ui.horizontal(|ui| {
+                            let mut details =
+                                format!("{} × {}", image.dimensions[0], image.dimensions[1]);
+                            if image.reduced {
+                                details.push_str("  ·  Reduced preview");
+                            }
+                            let width = ui
+                                .painter()
+                                .layout_no_wrap(
+                                    details.clone(),
+                                    egui::FontId::proportional(12.0),
+                                    chrome::MUTED,
+                                )
+                                .size()
+                                .x;
+                            let name_width = (ui.available_width() - width - 16.0).max(0.0);
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(name_width, 20.0),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.add(
+                                        egui::Label::new(
+                                            image
+                                                .path
+                                                .file_name()
+                                                .unwrap_or_default()
+                                                .to_string_lossy(),
+                                        )
+                                        .truncate(),
+                                    )
+                                    .on_hover_text(image.path.to_string_lossy());
+                                },
+                            );
+                            ui.label(egui::RichText::new(details).size(12.0).color(chrome::MUTED));
+                        });
+                    } else {
                         ui.label(
-                            egui::RichText::new(error)
-                                .color(egui::Color32::from_rgb(245, 160, 150)),
+                            egui::RichText::new("JPEG · PNG · WebP")
+                                .size(12.0)
+                                .color(chrome::MUTED),
                         );
-                        if ui.small_button("Dismiss").clicked() {
-                            self.error = None;
-                        }
-                    });
-                }
-                if let Some(image) = &self.image {
-                    ui.horizontal(|ui| {
-                        ui.add(
-                            egui::Label::new(
-                                image.path.file_name().unwrap_or_default().to_string_lossy(),
-                            )
-                            .truncate(),
-                        )
-                        .on_hover_text(image.path.to_string_lossy());
-                        ui.separator();
-                        ui.weak(format!("{} × {}", image.dimensions[0], image.dimensions[1]));
-                        if image.reduced {
-                            ui.weak("Reduced preview");
-                        }
-                    });
-                } else {
-                    ui.weak("JPEG · PNG · WebP");
-                }
-            });
+                    }
+                });
         }
 
-        egui::CentralPanel::default().show(ui, |ui| {
-            if let Some(image) = &self.image {
-                let bounds = ui.max_rect();
-                let source = egui::vec2(image.dimensions[0] as f32, image.dimensions[1] as f32);
-                let pixels_per_point = ctx.pixels_per_point();
-                let response = ui.allocate_rect(bounds, egui::Sense::click_and_drag());
-                if response.double_clicked() {
-                    if self.view.is_fit() {
-                        self.view.actual_size();
-                    } else {
-                        self.view.fit();
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::new()
+                    .fill(chrome::CANVAS)
+                    .inner_margin(if fullscreen { 0 } else { 12 }),
+            )
+            .show(ui, |ui| {
+                if let Some(image) = &self.image {
+                    let bounds = ui.max_rect();
+                    let source = egui::vec2(image.dimensions[0] as f32, image.dimensions[1] as f32);
+                    let pixels_per_point = ctx.pixels_per_point();
+                    let response = ui.allocate_rect(bounds, egui::Sense::click_and_drag());
+                    if response.double_clicked() {
+                        if self.view.is_fit() {
+                            self.view.actual_size();
+                        } else {
+                            self.view.fit();
+                        }
                     }
-                }
-                if let Some(factor) = zoom_request {
-                    self.view
-                        .zoom_at(factor, bounds.center(), bounds, source, pixels_per_point);
-                }
-                if response.hovered() {
-                    let scroll = ctx.input(|input| input.smooth_scroll_delta.y);
-                    if scroll != 0.0 {
-                        let anchor = ctx
-                            .input(|input| input.pointer.hover_pos())
-                            .unwrap_or(bounds.center());
+                    if let Some(factor) = zoom_request {
                         self.view.zoom_at(
-                            (scroll * 0.003).clamp(-2.0, 2.0).exp(),
-                            anchor,
+                            factor,
+                            bounds.center(),
                             bounds,
                             source,
                             pixels_per_point,
                         );
                     }
-                }
-                let rect = self.view.rect(bounds, source, pixels_per_point);
-                let can_pan = rect.width() > bounds.width() || rect.height() > bounds.height();
-                if can_pan {
-                    response.clone().on_hover_cursor(egui::CursorIcon::Grab);
-                    if response.dragged_by(egui::PointerButton::Primary) {
-                        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
-                        self.view.pan(
-                            ctx.input(|input| input.pointer.delta()),
-                            bounds,
-                            source,
-                            pixels_per_point,
-                        );
+                    if response.hovered() {
+                        let scroll = ctx.input(|input| input.smooth_scroll_delta.y);
+                        if scroll != 0.0 {
+                            let anchor = ctx
+                                .input(|input| input.pointer.hover_pos())
+                                .unwrap_or(bounds.center());
+                            self.view.zoom_at(
+                                (scroll * 0.003).clamp(-2.0, 2.0).exp(),
+                                anchor,
+                                bounds,
+                                source,
+                                pixels_per_point,
+                            );
+                        }
                     }
-                }
-                let rect = self.view.rect(bounds, source, pixels_per_point);
-                let painter = ui.painter().with_clip_rect(bounds);
-                painter.image(
-                    image.texture.id(),
-                    rect,
-                    egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                    egui::Color32::WHITE,
-                );
-                if !fullscreen {
-                    let zoom = self.view.scale(bounds, source, pixels_per_point) * 100.0;
-                    painter.text(
-                        bounds.right_bottom() - egui::vec2(12.0, 12.0),
-                        egui::Align2::RIGHT_BOTTOM,
-                        format!("{zoom:.0}%"),
-                        egui::FontId::proportional(12.0),
-                        egui::Color32::from_gray(170),
+                    let rect = self.view.rect(bounds, source, pixels_per_point);
+                    let can_pan = rect.width() > bounds.width() || rect.height() > bounds.height();
+                    if can_pan {
+                        response.clone().on_hover_cursor(egui::CursorIcon::Grab);
+                        if response.dragged_by(egui::PointerButton::Primary) {
+                            ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+                            self.view.pan(
+                                ctx.input(|input| input.pointer.delta()),
+                                bounds,
+                                source,
+                                pixels_per_point,
+                            );
+                        }
+                    }
+                    let rect = self.view.rect(bounds, source, pixels_per_point);
+                    let painter = ui.painter().with_clip_rect(bounds);
+                    painter.image(
+                        image.texture.id(),
+                        rect,
+                        egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                        egui::Color32::WHITE,
                     );
+                    if !fullscreen {
+                        let zoom = self.view.scale(bounds, source, pixels_per_point) * 100.0;
+                        let label = painter.layout_no_wrap(
+                            format!("{zoom:.0}%"),
+                            egui::FontId::proportional(12.0),
+                            egui::Color32::from_gray(220),
+                        );
+                        let size = label.size() + egui::vec2(16.0, 8.0);
+                        let badge = egui::Rect::from_min_size(
+                            bounds.right_bottom() - size - egui::vec2(8.0, 8.0),
+                            size,
+                        );
+                        painter.rect_filled(badge, 6.0, egui::Color32::from_black_alpha(190));
+                        painter.galley(
+                            badge.min + egui::vec2(8.0, 4.0),
+                            label,
+                            egui::Color32::WHITE,
+                        );
+                    }
+                    return;
                 }
-                return;
-            }
-            let center = ui.max_rect().center();
-            let painter = ui.painter();
-            let muted = egui::Color32::from_rgb(135, 139, 148);
-            let icon = egui::Rect::from_center_size(
-                center - egui::vec2(0.0, 76.0),
-                egui::vec2(64.0, 48.0),
-            );
-            painter.rect_stroke(
-                icon,
-                8.0,
-                egui::Stroke::new(1.5, muted),
-                egui::StrokeKind::Inside,
-            );
-            painter.circle_filled(icon.min + egui::vec2(45.0, 14.0), 4.0, muted);
-            painter.line_segment(
-                [
-                    icon.min + egui::vec2(9.0, 37.0),
-                    icon.min + egui::vec2(25.0, 21.0),
-                ],
-                egui::Stroke::new(1.5, muted),
-            );
-            painter.line_segment(
-                [
-                    icon.min + egui::vec2(25.0, 21.0),
-                    icon.min + egui::vec2(43.0, 39.0),
-                ],
-                egui::Stroke::new(1.5, muted),
-            );
-            painter.text(
-                center - egui::vec2(0.0, 8.0),
-                egui::Align2::CENTER_CENTER,
-                "Lumen",
-                egui::FontId::proportional(34.0),
-                egui::Color32::from_rgb(232, 234, 239),
-            );
-            painter.text(
-                center + egui::vec2(0.0, 32.0),
-                egui::Align2::CENTER_CENTER,
-                "Open an image or drop one here.",
-                egui::FontId::proportional(16.0),
-                muted,
-            );
-        });
+                let bounds = ui.max_rect();
+                let height = bounds.height().min(270.0);
+                let area = egui::Rect::from_center_size(
+                    bounds.center(),
+                    egui::vec2(bounds.width().min(360.0), height),
+                );
+                ui.scope_builder(
+                    egui::UiBuilder::new()
+                        .max_rect(area)
+                        .layout(egui::Layout::top_down(egui::Align::Center)),
+                    |ui| {
+                        let icon_size = (height * 0.32).clamp(48.0, 88.0);
+                        if let Some(brand) = &self.brand {
+                            ui.add(egui::Image::new((
+                                brand.id(),
+                                egui::vec2(icon_size, icon_size),
+                            )));
+                        }
+                        ui.add_space(10.0);
+                        ui.label(
+                            egui::RichText::new("Lumen")
+                                .size(28.0)
+                                .color(egui::Color32::from_rgb(240, 241, 237)),
+                        );
+                        ui.label(
+                            egui::RichText::new("Open a photo or drop it here.")
+                                .size(14.0)
+                                .color(chrome::MUTED),
+                        );
+                        ui.add_space(12.0);
+                        if chrome::open_button(ui, self.pending.is_none()).clicked() {
+                            self.open(&ctx, None);
+                        }
+                        ui.add_space(4.0);
+                        ui.label(
+                            egui::RichText::new("Ctrl+O  ·  JPEG, PNG, WebP")
+                                .size(11.0)
+                                .color(chrome::MUTED),
+                        );
+                    },
+                );
+            });
+    }
+}
+
+impl eframe::App for LumenApp {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.show(ui);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_visible_shapes(
+        shape: &egui::epaint::Shape,
+        clip: egui::Rect,
+        metadata_seen: &mut bool,
+    ) {
+        match shape {
+            egui::epaint::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    assert_visible_shapes(shape, clip, metadata_seen);
+                }
+            }
+            egui::epaint::Shape::Text(text) => {
+                let label = text.galley.text();
+                if label.starts_with("3840 × 2160") {
+                    *metadata_seen = true;
+                }
+                assert!(
+                    clip.expand(2.0).contains_rect(shape.visual_bounding_rect()),
+                    "Clipped text {label:?}: {:?} outside {clip:?}",
+                    shape.visual_bounding_rect()
+                );
+            }
+            egui::epaint::Shape::LineSegment { .. } => {
+                assert!(
+                    clip.expand(2.0).contains_rect(shape.visual_bounding_rect()),
+                    "Clipped toolbar stroke: {:?} outside {clip:?}",
+                    shape.visual_bounding_rect()
+                );
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn loaded_image_controls_and_metadata_remain_visible_when_resizing() {
+        let ctx = egui::Context::default();
+        chrome::configure(&ctx);
+        let directory = tempfile::tempdir().unwrap();
+        let name = "a-long-photo-name-that-must-truncate-without-moving-the-metadata-2.jpg";
+        let path = directory.path().join(name);
+        for index in 1..=7 {
+            std::fs::write(
+                directory
+                    .path()
+                    .join(name.replace("-2.jpg", &format!("-{index}.jpg"))),
+                [],
+            )
+            .unwrap();
+        }
+        let mut app = LumenApp {
+            image: Some(DisplayedImage {
+                texture: ctx.load_texture(
+                    "layout-fixture",
+                    egui::ColorImage::filled([2, 2], egui::Color32::WHITE),
+                    egui::TextureOptions::LINEAR,
+                ),
+                path: path.clone(),
+                dimensions: [3840, 2160],
+                reduced: true,
+            }),
+            folder: Some(Folder::scan(&path).unwrap()),
+            ..Default::default()
+        };
+        for size in [
+            egui::vec2(480.0, 360.0),
+            egui::vec2(620.0, 560.0),
+            egui::vec2(800.0, 560.0),
+            egui::vec2(1100.0, 740.0),
+            egui::vec2(480.0, 360.0),
+        ] {
+            for _ in 0..3 {
+                let mut output = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                        ..Default::default()
+                    },
+                    |ui| app.show(ui),
+                );
+                output.textures_delta.clear();
+                let mut metadata_seen = false;
+                for clipped in &output.shapes {
+                    assert_visible_shapes(&clipped.shape, clipped.clip_rect, &mut metadata_seen);
+                }
+                assert!(metadata_seen, "Image metadata was not painted at {size:?}");
+            }
+        }
+    }
 
     fn save_image(path: &std::path::Path) {
         image::RgbaImage::from_pixel(3, 2, image::Rgba([100, 150, 200, 255]))
