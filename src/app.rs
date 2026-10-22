@@ -1,9 +1,10 @@
 use eframe::egui;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::time::{Duration, Instant};
 
 use crate::chrome::{self, Icon};
-use crate::image_loader::{self, LoadedImage};
+use crate::image_loader::{self, Animation, LoadedImage};
 use crate::navigation::{Direction, Folder};
 use crate::view::View;
 
@@ -59,6 +60,76 @@ struct DisplayedImage {
     path: PathBuf,
     dimensions: [u32; 2],
     reduced: bool,
+    playback: Option<Playback>,
+}
+
+struct Playback {
+    animation: Animation,
+    ends: Vec<Duration>,
+    frame: usize,
+    started: Instant,
+    elapsed: Duration,
+    playing: bool,
+    finished: bool,
+}
+
+impl Playback {
+    fn new(animation: Animation, now: Instant) -> Self {
+        let mut total = Duration::ZERO;
+        let ends = animation
+            .frames
+            .iter()
+            .map(|frame| {
+                total += frame.delay;
+                total
+            })
+            .collect();
+        Self {
+            animation,
+            ends,
+            frame: 0,
+            started: now,
+            elapsed: Duration::ZERO,
+            playing: true,
+            finished: false,
+        }
+    }
+
+    fn toggle(&mut self, now: Instant) {
+        if self.playing {
+            self.elapsed += now.saturating_duration_since(self.started);
+            self.playing = false;
+        } else {
+            if self.finished {
+                self.elapsed = Duration::ZERO;
+                self.finished = false;
+            }
+            self.started = now;
+            self.playing = true;
+        }
+    }
+
+    fn advance(&mut self, now: Instant) -> Option<Duration> {
+        let elapsed = self.elapsed
+            + if self.playing {
+                now.saturating_duration_since(self.started)
+            } else {
+                Duration::ZERO
+            };
+        let cycle = *self.ends.last().expect("An animation contains frames");
+        if let Some(plays) = self.animation.plays
+            && elapsed >= cycle * plays
+        {
+            self.elapsed = cycle * plays;
+            self.frame = self.animation.frames.len() - 1;
+            self.playing = false;
+            self.finished = true;
+            return None;
+        }
+        let phase = Duration::from_nanos((elapsed.as_nanos() % cycle.as_nanos()) as u64);
+        self.frame = self.ends.partition_point(|end| *end <= phase);
+        self.playing.then_some(self.ends[self.frame] - phase)
+    }
 }
 
 #[derive(Default)]
@@ -197,7 +268,7 @@ impl LumenApp {
                     OpenRequest::Pick => {
                         let mut dialog = rfd::FileDialog::new()
                             .set_title("Open image")
-                            .add_filter("Images", &["jpg", "jpeg", "png", "webp"]);
+                            .add_filter("Images", &["jpg", "jpeg", "png", "webp", "gif"]);
                         if let Some(directory) = directory {
                             dialog = dialog.set_directory(directory);
                         }
@@ -257,6 +328,9 @@ impl LumenApp {
                     path: loaded.path,
                     dimensions: loaded.dimensions,
                     reduced: loaded.reduced,
+                    playback: loaded
+                        .animation
+                        .map(|animation| Playback::new(animation, Instant::now())),
                 });
             }
             Ok(None) => {}
@@ -269,6 +343,34 @@ impl LumenApp {
     fn show(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.finish_loading(&ctx);
+        if let Some(image) = &mut self.image
+            && let Some(playback) = &mut image.playback
+        {
+            let toggle = ctx.input_mut(|input| {
+                let pressed = input.events.iter().any(|event| matches!(event,
+                    egui::Event::Key { key: egui::Key::Space, pressed: true, repeat: false, modifiers, .. }
+                    if modifiers.is_none()
+                ));
+                input.consume_key(egui::Modifiers::NONE, egui::Key::Space);
+                pressed
+            });
+            let now = Instant::now();
+            let previous = playback.frame;
+            // Advance before toggling so a key press at the end restarts the GIF.
+            playback.advance(now);
+            if toggle {
+                playback.toggle(now);
+            }
+            if let Some(delay) = playback.advance(now) {
+                ctx.request_repaint_after(delay);
+            }
+            if playback.frame != previous {
+                image.texture.set(
+                    playback.animation.frames[playback.frame].pixels.clone(),
+                    egui::TextureOptions::LINEAR,
+                );
+            }
+        }
         if let Some(path) = self.startup_path.take() {
             self.open(&ctx, Some(path));
         }
@@ -385,6 +487,15 @@ impl LumenApp {
                             if image.reduced {
                                 details.push_str("  ·  Reduced preview");
                             }
+                            if let Some(playback) = &image.playback
+                                && !playback.playing
+                            {
+                                details.push_str(if playback.finished {
+                                    "  ·  Finished"
+                                } else {
+                                    "  ·  Paused"
+                                });
+                            }
                             let width = ui
                                 .painter()
                                 .layout_no_wrap(
@@ -416,7 +527,7 @@ impl LumenApp {
                         });
                     } else {
                         ui.label(
-                            egui::RichText::new("JPEG · PNG · WebP")
+                            egui::RichText::new("JPEG · PNG · WebP · GIF")
                                 .size(12.0)
                                 .color(chrome::MUTED),
                         );
@@ -436,6 +547,15 @@ impl LumenApp {
                     let source = egui::vec2(image.dimensions[0] as f32, image.dimensions[1] as f32);
                     let pixels_per_point = ctx.pixels_per_point();
                     let response = ui.allocate_rect(bounds, egui::Sense::click_and_drag());
+                    if let Some(playback) = &image.playback {
+                        response.clone().on_hover_text(if playback.playing {
+                            "Pause animation · Space"
+                        } else if playback.finished {
+                            "Replay animation · Space"
+                        } else {
+                            "Resume animation · Space"
+                        });
+                    }
                     if response.double_clicked() {
                         if self.view.is_fit() {
                             self.view.actual_size();
@@ -540,7 +660,7 @@ impl LumenApp {
                         }
                         ui.add_space(4.0);
                         ui.label(
-                            egui::RichText::new("Ctrl+O  ·  JPEG, PNG, WebP")
+                            egui::RichText::new("Ctrl+O  ·  JPEG, PNG, WebP, GIF")
                                 .size(11.0)
                                 .color(chrome::MUTED),
                         );
@@ -559,6 +679,151 @@ impl eframe::App for LumenApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn animation(plays: Option<u32>) -> Animation {
+        Animation {
+            frames: [100, 200, 300]
+                .into_iter()
+                .map(|millis| image_loader::AnimationFrame {
+                    pixels: std::sync::Arc::new(egui::ColorImage::filled(
+                        [1, 1],
+                        egui::Color32::WHITE,
+                    )),
+                    delay: Duration::from_millis(millis),
+                })
+                .collect(),
+            plays,
+        }
+    }
+
+    #[test]
+    fn playback_obeys_delays_and_catches_up_without_iterating_missed_cycles() {
+        let now = Instant::now();
+        let mut playback = Playback::new(animation(None), now);
+        assert_eq!(playback.advance(now), Some(Duration::from_millis(100)));
+        assert_eq!(
+            playback.advance(now + Duration::from_millis(100)),
+            Some(Duration::from_millis(200))
+        );
+        assert_eq!(playback.frame, 1);
+        playback.advance(now + Duration::from_millis(300));
+        assert_eq!(playback.frame, 2);
+        playback.advance(now + Duration::from_millis(600));
+        assert_eq!(playback.frame, 0);
+        assert_eq!(
+            playback.advance(now + Duration::from_secs(3600) + Duration::from_millis(150)),
+            Some(Duration::from_millis(150))
+        );
+        assert_eq!(playback.frame, 1);
+    }
+
+    #[test]
+    fn pause_preserves_remaining_frame_time_and_finite_playback_can_restart() {
+        let now = Instant::now();
+        let mut playback = Playback::new(animation(Some(2)), now);
+        playback.toggle(now + Duration::from_millis(50));
+        assert_eq!(playback.advance(now + Duration::from_secs(30)), None);
+        assert_eq!(playback.frame, 0);
+        playback.toggle(now + Duration::from_secs(30));
+        assert_eq!(
+            playback.advance(now + Duration::from_secs(30)),
+            Some(Duration::from_millis(50))
+        );
+        playback.advance(now + Duration::from_secs(31));
+        assert_eq!(playback.frame, 2);
+        assert!(!playback.finished);
+        assert_eq!(playback.advance(now + Duration::from_secs(32)), None);
+        assert!(playback.finished);
+        assert_eq!(playback.frame, 2);
+        assert_eq!(playback.advance(now + Duration::from_secs(40)), None);
+        assert_eq!(playback.frame, 2);
+        playback.toggle(now + Duration::from_secs(40));
+        assert_eq!(
+            playback.advance(now + Duration::from_secs(40)),
+            Some(Duration::from_millis(100))
+        );
+        assert_eq!(playback.frame, 0);
+        assert!(!playback.finished);
+    }
+
+    #[test]
+    fn space_toggles_animation_once_and_ignores_key_repeat_and_modifiers() {
+        let ctx = egui::Context::default();
+        chrome::configure(&ctx);
+        let mut app = LumenApp {
+            image: Some(DisplayedImage {
+                texture: ctx.load_texture(
+                    "animation",
+                    egui::ColorImage::filled([1, 1], egui::Color32::WHITE),
+                    egui::TextureOptions::LINEAR,
+                ),
+                path: "motion.gif".into(),
+                dimensions: [1, 1],
+                reduced: false,
+                playback: Some(Playback::new(animation(None), Instant::now())),
+            }),
+            ..Default::default()
+        };
+        for (repeat, modifiers, playing, release) in [
+            (false, egui::Modifiers::NONE, false, false),
+            (true, egui::Modifiers::NONE, false, true),
+            (false, egui::Modifiers::CTRL, false, true),
+            (false, egui::Modifiers::NONE, true, true),
+        ] {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(480.0, 360.0),
+                )),
+                events: vec![egui::Event::Key {
+                    key: egui::Key::Space,
+                    physical_key: None,
+                    pressed: true,
+                    repeat,
+                    modifiers,
+                }],
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| app.show(ui));
+            output.textures_delta.clear();
+            for clipped in &output.shapes {
+                assert_visible_shapes(
+                    &clipped.shape,
+                    clipped.clip_rect,
+                    &mut false,
+                    &mut Vec::new(),
+                );
+            }
+            assert_eq!(
+                app.image
+                    .as_ref()
+                    .unwrap()
+                    .playback
+                    .as_ref()
+                    .unwrap()
+                    .playing,
+                playing,
+                "repeat={repeat}, modifiers={modifiers:?}"
+            );
+            // Release between physical presses so egui does not infer a repeat.
+            if release {
+                let mut output = ctx.run_ui(
+                    egui::RawInput {
+                        events: vec![egui::Event::Key {
+                            key: egui::Key::Space,
+                            physical_key: None,
+                            pressed: false,
+                            repeat: false,
+                            modifiers,
+                        }],
+                        ..Default::default()
+                    },
+                    |ui| app.show(ui),
+                );
+                output.textures_delta.clear();
+            }
+        }
+    }
 
     fn assert_visible_shapes(
         shape: &egui::epaint::Shape,
@@ -622,6 +887,7 @@ mod tests {
                 path: path.clone(),
                 dimensions: [3840, 2160],
                 reduced: true,
+                playback: None,
             }),
             folder: Some(Folder::scan(&path).unwrap()),
             ..Default::default()

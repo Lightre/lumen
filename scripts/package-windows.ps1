@@ -65,7 +65,7 @@ Lumen $version
 A minimal photo viewer for Windows x64.
 
 Extract the entire ZIP before running lumen.exe. Use Open image or Ctrl+O to
-select a JPEG, PNG, or WebP file. You can also drop a photo onto the window
+select a JPEG, PNG, WebP, or GIF file. You can also drop a photo onto the window
 or the executable, or pass its path when launching Lumen from a terminal.
 
 Left / Right: previous / next image
@@ -73,14 +73,16 @@ Mouse wheel: zoom around the pointer
 Left mouse drag: pan a zoomed image
 Home: fit to window
 R / Shift+R: rotate right / left (view only)
+Space: pause / resume GIF animation (replay after completion)
 Double-click: toggle Fit / 100%
 F11: toggle full screen
 Esc: exit full screen
 
 This is an early development build. Images are limited to 32 megapixels and
-256 MiB per file. Large dimensions may use a reduced preview. Animated images
-and color profile management are not supported. No installer or automatic
-file association registration is included.
+256 MiB per file. Large dimensions may use a reduced preview. GIF animations
+play automatically; the decoded frame cache is limited to 128 MiB and 1000
+frames. Animated PNG/WebP and color profile management are not supported.
+No installer or automatic file association registration is included.
 
 Copyright (C) 2026 Lightre. Lumen is licensed under GNU GPL version 3 only,
 without warranty. See LICENSE and COPYRIGHT. Third-party components retain
