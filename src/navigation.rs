@@ -74,7 +74,7 @@ fn supported(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
-            ["jpg", "jpeg", "png", "webp", "gif"]
+            ["jpg", "jpeg", "png", "webp", "gif", "bmp"]
                 .iter()
                 .any(|supported| extension.eq_ignore_ascii_case(supported))
         })
@@ -87,12 +87,18 @@ mod tests {
     #[test]
     fn scans_only_supported_files_and_sorts_naturally() {
         let directory = tempfile::tempdir().unwrap();
-        for name in ["photo10.png", "Photo2.JPG", "photo1.webp", "notes.txt"] {
+        for name in [
+            "photo10.png",
+            "Photo2.JPG",
+            "photo1.webp",
+            "photo3.BmP",
+            "notes.txt",
+        ] {
             std::fs::write(directory.path().join(name), []).unwrap();
         }
         std::fs::create_dir(directory.path().join("folder.png")).unwrap();
         let folder = Folder::scan(&directory.path().join("Photo2.JPG")).unwrap();
-        assert_eq!(folder.position(), (2, 3));
+        assert_eq!(folder.position(), (2, 4));
         assert_eq!(
             folder
                 .neighbor(Direction::Previous)
@@ -104,6 +110,17 @@ mod tests {
         );
         assert_eq!(
             folder
+                .neighbor(Direction::Next)
+                .unwrap()
+                .path()
+                .file_name()
+                .unwrap(),
+            "photo3.BmP"
+        );
+        assert_eq!(
+            folder
+                .neighbor(Direction::Next)
+                .unwrap()
                 .neighbor(Direction::Next)
                 .unwrap()
                 .path()
