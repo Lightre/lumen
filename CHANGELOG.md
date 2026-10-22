@@ -5,6 +5,8 @@ list of merged pull requests.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-22
+
 ### Added
 
 - GIF viewing with automatic animation playback and Space to pause, resume, or replay.
