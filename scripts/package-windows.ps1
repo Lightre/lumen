@@ -65,7 +65,7 @@ Lumen $version
 A minimal photo viewer for Windows x64.
 
 Extract the entire ZIP before running lumen.exe. Use Open image or Ctrl+O to
-select a JPEG, PNG, WebP, or GIF file. You can also drop a photo onto the window
+select a JPEG, PNG, WebP, GIF, or BMP file. You can also drop a photo onto the window
 or the executable, or pass its path when launching Lumen from a terminal.
 
 Left / Right: previous / next image

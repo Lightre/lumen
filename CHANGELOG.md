@@ -8,6 +8,7 @@ list of merged pull requests.
 ### Added
 
 - GIF viewing with automatic animation playback and Space to pause, resume, or replay.
+- BMP viewing with the existing navigation and image controls.
 
 ## [0.1.0] - 2026-10-22
 

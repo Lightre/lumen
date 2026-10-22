@@ -61,9 +61,15 @@ fn decode(source: impl BufRead + Seek, max_side: u32) -> Result<Decoded, String>
         .map_err(|_| "This file could not be read.".to_owned())?;
     if !matches!(
         reader.format(),
-        Some(ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::WebP | ImageFormat::Gif)
+        Some(
+            ImageFormat::Jpeg
+                | ImageFormat::Png
+                | ImageFormat::WebP
+                | ImageFormat::Gif
+                | ImageFormat::Bmp
+        )
     ) {
-        return Err("Unsupported image. Choose a JPEG, PNG, WebP, or GIF file.".to_owned());
+        return Err("Unsupported image. Choose a JPEG, PNG, WebP, GIF, or BMP file.".to_owned());
     }
     if reader.format() == Some(ImageFormat::Gif) {
         return decode_gif(
@@ -311,6 +317,93 @@ mod tests {
         assert!(animation.is_none());
     }
 
+    fn bmp(
+        width: i32,
+        height: i32,
+        bits: u16,
+        compression: u32,
+        palette: &[[u8; 4]],
+        pixels: &[u8],
+    ) -> Vec<u8> {
+        let offset = 54 + palette.len() as u32 * 4;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"BM");
+        bytes.extend_from_slice(&(offset + pixels.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&[0; 4]);
+        bytes.extend_from_slice(&offset.to_le_bytes());
+        bytes.extend_from_slice(&40u32.to_le_bytes());
+        bytes.extend_from_slice(&width.to_le_bytes());
+        bytes.extend_from_slice(&height.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&bits.to_le_bytes());
+        bytes.extend_from_slice(&compression.to_le_bytes());
+        bytes.extend_from_slice(&(pixels.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&[0; 8]);
+        bytes.extend_from_slice(&(palette.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        for color in palette {
+            bytes.extend_from_slice(color);
+        }
+        bytes.extend_from_slice(pixels);
+        bytes
+    }
+
+    #[test]
+    fn bmp_decodes_padded_rgb_rows_in_both_directions() {
+        let bottom_up = [255, 0, 0, 255, 255, 255, 0, 0, 0, 0, 255, 0, 255, 0, 0, 0];
+        let top_down = [&bottom_up[8..], &bottom_up[..8]].concat();
+        for (height, data) in [(2, bottom_up.as_slice()), (-2, top_down.as_slice())] {
+            let (dimensions, pixels, reduced, animation) =
+                decode(Cursor::new(bmp(2, height, 24, 0, &[], data)), 1024).unwrap();
+            assert_eq!(dimensions, [2, 2]);
+            assert_eq!(
+                pixels.pixels,
+                [
+                    egui::Color32::RED,
+                    egui::Color32::GREEN,
+                    egui::Color32::BLUE,
+                    egui::Color32::WHITE
+                ]
+            );
+            assert!(!reduced);
+            assert!(animation.is_none());
+        }
+    }
+
+    #[test]
+    fn bmp_decodes_indexed_and_rle8_pixels() {
+        let palette = [[0, 0, 0, 0], [0, 0, 255, 0], [0, 255, 0, 0], [255, 0, 0, 0]];
+        for (compression, data) in [
+            (0, [1, 2, 3, 0].as_slice()),
+            (1, [1, 1, 1, 2, 1, 3, 0, 1].as_slice()),
+        ] {
+            let (dimensions, pixels, _, _) =
+                decode(Cursor::new(bmp(3, 1, 8, compression, &palette, data)), 1024).unwrap();
+            assert_eq!(dimensions, [3, 1]);
+            assert_eq!(
+                pixels.pixels,
+                [
+                    egui::Color32::RED,
+                    egui::Color32::GREEN,
+                    egui::Color32::BLUE
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn bmp_rejects_invalid_headers_truncation_and_oversized_canvas() {
+        let bytes = bmp(2, 2, 24, 0, &[], &[0; 16]);
+        assert!(decode(Cursor::new(&bytes[..30]), 1024).is_err());
+        assert!(decode(Cursor::new(&bytes[..bytes.len() - 4]), 1024).is_err());
+        assert!(decode(Cursor::new(bmp(-2, 2, 24, 0, &[], &[0; 16])), 1024).is_err());
+        assert!(
+            decode(Cursor::new(bmp(8192, 8192, 24, 0, &[], &[])), 1024)
+                .unwrap_err()
+                .contains("32 megapixels")
+        );
+    }
+
     fn encoded(format: ImageFormat) -> Vec<u8> {
         let pixels = image::RgbaImage::from_pixel(6, 4, image::Rgba([180, 80, 30, 128]));
         let image = DynamicImage::ImageRgba8(pixels);
@@ -326,7 +419,12 @@ mod tests {
 
     #[test]
     fn decodes_supported_formats_from_contents() {
-        for format in [ImageFormat::Jpeg, ImageFormat::Png, ImageFormat::WebP] {
+        for format in [
+            ImageFormat::Jpeg,
+            ImageFormat::Png,
+            ImageFormat::WebP,
+            ImageFormat::Bmp,
+        ] {
             let (dimensions, pixels, reduced, animation) =
                 decode(Cursor::new(encoded(format)), 1024).unwrap();
             assert_eq!(dimensions, [6, 4]);
@@ -338,7 +436,7 @@ mod tests {
 
     #[test]
     fn preserves_transparency() {
-        for format in [ImageFormat::Png, ImageFormat::WebP] {
+        for format in [ImageFormat::Png, ImageFormat::WebP, ImageFormat::Bmp] {
             let (_, pixels, _, _) = decode(Cursor::new(encoded(format)), 1024).unwrap();
             assert_eq!(pixels.pixels[0].a(), 128);
         }
@@ -346,11 +444,12 @@ mod tests {
 
     #[test]
     fn reduces_preview_without_losing_original_dimensions() {
-        let (dimensions, pixels, reduced, _) =
-            decode(Cursor::new(encoded(ImageFormat::Png)), 3).unwrap();
-        assert_eq!(dimensions, [6, 4]);
-        assert_eq!(pixels.size, [3, 2]);
-        assert!(reduced);
+        for format in [ImageFormat::Png, ImageFormat::Bmp] {
+            let (dimensions, pixels, reduced, _) = decode(Cursor::new(encoded(format)), 3).unwrap();
+            assert_eq!(dimensions, [6, 4]);
+            assert_eq!(pixels.size, [3, 2]);
+            assert!(reduced);
+        }
     }
 
     #[test]
