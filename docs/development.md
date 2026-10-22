@@ -4,6 +4,9 @@ Run the commands below from the repository root.
 
 Requires stable Rust with the MSVC toolchain and Windows C++ build tools, including
 the Windows SDK resource compiler for the application icon and version information.
+HEIC decoding also requires CMake 3.24+ and a C++20 compiler. Install Visual Studio's
+C++ CMake tools, put CMake on PATH, or set `CMAKE` to its executable path. The bundled
+native sources build offline and link statically; see [native/](../native/README.md).
 
 ```powershell
 cargo run --locked

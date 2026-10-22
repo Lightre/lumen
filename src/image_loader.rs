@@ -1,10 +1,14 @@
-use std::io::{BufRead, Seek};
+use std::io::{BufRead, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use eframe::egui;
 use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
+
+#[cfg(windows)]
+#[path = "image_loader/heic.rs"]
+mod heic;
 
 const MAX_PIXELS: u64 = 32_000_000;
 const MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
@@ -60,6 +64,40 @@ fn decode(source: impl BufRead + Seek, max_side: u32) -> Result<Decoded, String>
     let mut reader = ImageReader::new(source)
         .with_guessed_format()
         .map_err(|_| "This file could not be read.".to_owned())?;
+    if reader.format().is_none() {
+        let mut source = reader.into_inner();
+        source
+            .rewind()
+            .map_err(|_| "This file could not be read.")?;
+        let mut signature = [0; 8];
+        if source.read_exact(&mut signature).is_err() || &signature[4..8] != b"ftyp" {
+            return Err(
+                "Unsupported image. Choose a JPEG, PNG, WebP, GIF, BMP, TIFF, or HEIC file."
+                    .to_owned(),
+            );
+        }
+        source
+            .rewind()
+            .map_err(|_| "This file could not be read.")?;
+        let mut bytes = Vec::new();
+        source
+            .take(MAX_FILE_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| "This file could not be read.")?;
+        if bytes.len() as u64 > MAX_FILE_BYTES {
+            return Err("This file is too large. The current limit is 256 MiB.".to_owned());
+        }
+        #[cfg(windows)]
+        if bytes.get(4..8) == Some(b"ftyp") {
+            let decoded = heic::decode(&bytes)?;
+            let dimensions = [decoded.width(), decoded.height()];
+            let (pixels, reduced) = preview(decoded, max_side);
+            return Ok((dimensions, pixels, reduced, None));
+        }
+        return Err(
+            "Unsupported image. Choose a JPEG, PNG, WebP, GIF, BMP, TIFF, or HEIC file.".to_owned(),
+        );
+    }
     if !matches!(
         reader.format(),
         Some(
@@ -72,7 +110,7 @@ fn decode(source: impl BufRead + Seek, max_side: u32) -> Result<Decoded, String>
         )
     ) {
         return Err(
-            "Unsupported image. Choose a JPEG, PNG, WebP, GIF, BMP, or TIFF file.".to_owned(),
+            "Unsupported image. Choose a JPEG, PNG, WebP, GIF, BMP, TIFF, or HEIC file.".to_owned(),
         );
     }
     if reader.format() == Some(ImageFormat::Gif) {
@@ -209,6 +247,66 @@ fn decode_error(error: image::ImageError) -> String {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[cfg(windows)]
+    #[test]
+    fn decodes_heic_content_and_reduces_preview() {
+        let bytes = include_bytes!("../tests/data/heic/rainbow.heic");
+        let (dimensions, pixels, reduced, animation) = decode(Cursor::new(bytes), 1024).unwrap();
+        assert_eq!(dimensions, [451, 461]);
+        assert_eq!(pixels.size, [451, 461]);
+        assert!(!reduced);
+        assert!(animation.is_none());
+        let (dimensions, pixels, reduced, _) = decode(Cursor::new(bytes), 100).unwrap();
+        assert_eq!(dimensions, [451, 461]);
+        assert_eq!(pixels.size[1], 100);
+        assert!(reduced);
+        // The decoder selects by content, even if the file extension is different.
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("photo.png");
+        std::fs::write(&path, bytes).unwrap();
+        assert_eq!(load(&path, 1024).unwrap().dimensions, [451, 461]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn preserves_heic_alpha_and_applies_transforms_once() {
+        let (_, pixels, _, _) = decode(
+            Cursor::new(include_bytes!("../tests/data/heic/alpha.heic")),
+            1024,
+        )
+        .unwrap();
+        assert!(pixels.pixels.iter().any(|pixel| pixel.a() == 0));
+        assert!(pixels.pixels.iter().any(|pixel| pixel.a() == 255));
+        for bytes in [
+            include_bytes!("../tests/data/heic/orientation-2.heic").as_slice(),
+            include_bytes!("../tests/data/heic/orientation-6.heic").as_slice(),
+        ] {
+            let (dimensions, pixels, reduced, _) = decode(Cursor::new(bytes), 2048).unwrap();
+            assert_eq!(dimensions, [1200, 800]);
+            assert_eq!(pixels.size, [1200, 800]);
+            assert!(!reduced);
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejects_truncated_and_oversized_heic() {
+        let original = include_bytes!("../tests/data/heic/rainbow.heic");
+        assert!(decode(Cursor::new(&original[..64]), 1024).is_err());
+        let mut bytes = original.to_vec();
+        let ispe = bytes
+            .windows(4)
+            .position(|window| window == b"ispe")
+            .unwrap();
+        bytes[ispe + 8..ispe + 12].copy_from_slice(&40_000_u32.to_be_bytes());
+        bytes[ispe + 12..ispe + 16].copy_from_slice(&40_000_u32.to_be_bytes());
+        assert!(
+            decode(Cursor::new(bytes), 1024)
+                .unwrap_err()
+                .contains("limits")
+        );
+    }
 
     fn gif_bytes(repeat: Option<gif::Repeat>, disposal: gif::DisposalMethod) -> Vec<u8> {
         let mut bytes = Vec::new();

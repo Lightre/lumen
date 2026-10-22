@@ -74,15 +74,29 @@ fn supported(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
-            ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff"]
-                .iter()
-                .any(|supported| extension.eq_ignore_ascii_case(supported))
+            [
+                "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
+            ]
+            .iter()
+            .any(|supported| extension.eq_ignore_ascii_case(supported))
         })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sorts_heic_and_heif_files_naturally() {
+        let directory = tempfile::tempdir().unwrap();
+        for name in ["photo10.HEIC", "photo2.HeIf", "photo1.heic"] {
+            std::fs::write(directory.path().join(name), []).unwrap();
+        }
+        let navigation = Folder::scan(&directory.path().join("photo1.heic")).unwrap();
+        assert_eq!(navigation.files.len(), 3);
+        assert!(navigation.files[1].ends_with("photo2.HeIf"));
+        assert!(navigation.files[2].ends_with("photo10.HEIC"));
+    }
 
     #[test]
     fn scans_only_supported_files_and_sorts_naturally() {

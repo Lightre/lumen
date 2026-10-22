@@ -43,7 +43,8 @@ try {
     $config = & cargo vendor --locked --versioned-dirs vendor
     if ($LASTEXITCODE -ne 0) { throw 'Could not vendor locked dependency sources.' }
     New-Item -ItemType Directory -Path '.cargo' -Force | Out-Null
-    $config | Set-Content -LiteralPath '.cargo/config.toml' -Encoding utf8NoBOM
+    # Preserve target settings, including the static Windows C/C++ runtime.
+    $config | Add-Content -LiteralPath '.cargo/config.toml' -Encoding utf8NoBOM
     # Confirm that Cargo resolves the complete graph using only the bundled sources.
     & cargo metadata --frozen --format-version 1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'The bundled dependency graph could not be resolved offline.' }
@@ -70,7 +71,8 @@ See LICENSE, COPYRIGHT, BRANDING.md, and THIRD_PARTY_NOTICES.txt.
 
 Building on Windows x64
 1. Install Rust with the x86_64-pc-windows-msvc toolchain and Visual Studio
-   C++ build tools, including the Windows SDK resource compiler.
+   C++ build tools, including the Windows SDK resource compiler and CMake 3.24+
+   (on PATH, selected with CMAKE, or installed as Visual Studio C++ CMake tools).
 2. Extract the archive and open a terminal in the directory containing Cargo.toml.
 3. Run: cargo build --release --frozen --target x86_64-pc-windows-msvc
 4. Find the executable at target/x86_64-pc-windows-msvc/release/lumen.exe.
@@ -78,6 +80,8 @@ Building on Windows x64
 .cargo/config.toml directs Cargo to vendor/. --frozen uses Cargo.lock and
 prevents network access. The build tools above must already be installed;
 general-purpose tools and Windows system libraries are not bundled.
+native/sources contains the pinned libheif and libde265 sources. Their build
+does not download dependencies. Both decoder libraries link into lumen.exe.
 The recorded tool versions identify the preparation environment, without
 promising byte-for-byte identical binaries on other systems.
 
