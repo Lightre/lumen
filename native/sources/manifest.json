@@ -1,0 +1,20 @@
+[
+  {
+    "name": "libheif",
+    "version": "1.23.6",
+    "license": "LGPL-3.0-or-later",
+    "repository": "https://github.com/strukturag/libheif",
+    "revision": "f81f28ac014b1c28dee483ac45b72c6b05bc421a",
+    "archive": "libheif-1.23.6.tar.gz",
+    "sha256": "deb81283d703c01ac37dbe6f73690a13065ac153db4a84afcdd2a88318f21c2d"
+  },
+  {
+    "name": "libde265",
+    "version": "1.1.3",
+    "license": "LGPL-3.0-or-later",
+    "repository": "https://github.com/strukturag/libde265",
+    "revision": "ba62bf4cfb3242f3bf0a45617ff09e35236e4d82",
+    "archive": "libde265-1.1.3.tar.gz",
+    "sha256": "7b90c1559e0b3e9bf3d0661c5069e4a2e125294811c3f9be513b5626907ac42d"
+  }
+]

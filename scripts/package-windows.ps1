@@ -24,6 +24,13 @@ $notices = Get-Content -LiteralPath (Join-Path $projectRoot 'THIRD_PARTY_NOTICES
 if (-not $notices.Contains("Cargo.lock SHA-256: $lockHash")) {
     throw 'Third-party notices are out of date. Run python scripts/update-third-party-notices.py and review the output.'
 }
+foreach ($native in (Get-Content -LiteralPath (Join-Path $projectRoot 'native/sources/manifest.json') -Raw | ConvertFrom-Json)) {
+    $archive = Join-Path $projectRoot "native/sources/$($native.archive)"
+    $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $native.sha256 -or -not $notices.Contains("Source archive SHA-256: $actual")) {
+        throw 'Native sources or notices are out of date. Review native/sources and regenerate third-party notices.'
+    }
+}
 $rustRoot = & rustc --print sysroot
 if ($LASTEXITCODE -ne 0) { throw 'Could not locate Rust standard library notices.' }
 $rustNotices = Join-Path $rustRoot 'share/doc/rust/COPYRIGHT-library.html'
@@ -65,7 +72,7 @@ Lumen $version
 A minimal photo viewer for Windows x64.
 
 Extract the entire ZIP before running lumen.exe. Use Open image or Ctrl+O to
-select a JPEG, PNG, WebP, GIF, BMP, or TIFF file. You can also drop a photo onto the window
+select a JPEG, PNG, WebP, GIF, BMP, TIFF, or HEIC file. You can also drop a photo onto the window
 or the executable, or pass its path when launching Lumen from a terminal.
 
 Left / Right: previous / next image
@@ -83,6 +90,8 @@ This is an early development build. Images are limited to 32 megapixels and
 play automatically; the decoded frame cache is limited to 128 MiB and 1000
 frames. Animated PNG/WebP and color profile management are not supported.
 TIFF files (.tif and .tiff) display the first image only.
+HEIC/HEIF files display the main HEVC photo without installing codecs.
+Live Photo video, HDR display, and other HEIF compression types are not supported.
 No installer or automatic file association registration is included.
 
 Copyright (C) 2026 Lightre. Lumen is licensed under GNU GPL version 3 only,

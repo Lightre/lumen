@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import tarfile
 from urllib.request import urlopen
 from urllib.error import HTTPError
 
@@ -118,6 +119,21 @@ def main():
             if not content:
                 raise RuntimeError(f"Empty notice: {label} / {source}")
             texts.setdefault(content, []).append(f"{label} / {source}")
+    native_sources = ROOT / "native/sources"
+    for package in json.loads((native_sources / "manifest.json").read_text(encoding="utf-8")):
+        archive = native_sources / package["archive"]
+        if hashlib.sha256(archive.read_bytes()).hexdigest() != package["sha256"]:
+            raise RuntimeError(f"Native source hash mismatch: {archive.name}")
+        label = f"{package['name']} {package['version']}"
+        parts += [f"{label} — {package['license']}",
+                  f"  {package['repository']}/tree/{package['revision']}",
+                  f"  Source archive SHA-256: {package['sha256']}"]
+        with tarfile.open(archive) as source:
+            for member in source.getmembers():
+                if member.isfile() and Path(member.name).name.lower().startswith(("copying", "license", "notice")):
+                    content = source.extractfile(member).read().decode("utf-8-sig").replace("\r\n", "\n").strip()
+                    if content:
+                        texts.setdefault(content, []).append(f"{label} / {member.name}")
     parts += ["", "LICENSE TEXTS AND NOTICES", ""]
     for content, sources in texts.items():
         parts += ["=" * 78, *sources, "=" * 78, "", content, ""]

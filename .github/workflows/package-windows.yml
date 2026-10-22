@@ -18,6 +18,9 @@ on:
       - 'COPYRIGHT'
       - 'BRANDING.md'
       - 'THIRD_PARTY_NOTICES.txt'
+      - 'native/**'
+      - '.cargo/config.toml'
+      - 'build.rs'
 
 permissions:
   contents: read
