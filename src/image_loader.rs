@@ -8,6 +8,7 @@ use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageRead
 
 const MAX_PIXELS: u64 = 32_000_000;
 const MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_ANIMATION_BYTES: usize = 128 * 1024 * 1024;
 const MAX_ANIMATION_FRAMES: usize = 1000;
 
@@ -67,9 +68,12 @@ fn decode(source: impl BufRead + Seek, max_side: u32) -> Result<Decoded, String>
                 | ImageFormat::WebP
                 | ImageFormat::Gif
                 | ImageFormat::Bmp
+                | ImageFormat::Tiff
         )
     ) {
-        return Err("Unsupported image. Choose a JPEG, PNG, WebP, GIF, or BMP file.".to_owned());
+        return Err(
+            "Unsupported image. Choose a JPEG, PNG, WebP, GIF, BMP, or TIFF file.".to_owned(),
+        );
     }
     if reader.format() == Some(ImageFormat::Gif) {
         return decode_gif(
@@ -80,9 +84,13 @@ fn decode(source: impl BufRead + Seek, max_side: u32) -> Result<Decoded, String>
         );
     }
     reader.limits(decoding_limits());
+    let is_tiff = reader.format() == Some(ImageFormat::Tiff);
     let mut decoder = reader.into_decoder().map_err(decode_error)?;
     let (width, height) = decoder.dimensions();
     check_dimensions(width, height)?;
+    if is_tiff && decoder.total_bytes() > MAX_DECODE_BYTES {
+        return Err("This image exceeds the current decoding limits.".to_owned());
+    }
     let orientation = decoder
         .orientation()
         .unwrap_or(image::metadata::Orientation::NoTransforms);
@@ -97,7 +105,7 @@ fn decoding_limits() -> Limits {
     let mut limits = Limits::default();
     limits.max_image_width = Some(32_768);
     limits.max_image_height = Some(32_768);
-    limits.max_alloc = Some(256 * 1024 * 1024);
+    limits.max_alloc = Some(MAX_DECODE_BYTES);
     limits
 }
 
@@ -317,6 +325,118 @@ mod tests {
         assert!(animation.is_none());
     }
 
+    fn tiff_bytes(
+        compression: tiff::encoder::Compression,
+        orientation: u16,
+        multiple: bool,
+    ) -> Vec<u8> {
+        use tiff::encoder::{TiffEncoder, colortype};
+        let mut bytes = Cursor::new(Vec::new());
+        {
+            let mut encoder = TiffEncoder::new(&mut bytes)
+                .unwrap()
+                .with_compression(compression);
+            let mut first = encoder.new_image::<colortype::RGB8>(2, 1).unwrap();
+            first
+                .encoder()
+                .write_tag(tiff::tags::Tag::Orientation, orientation)
+                .unwrap();
+            first.write_data(&[255, 0, 0, 0, 0, 255]).unwrap();
+            if multiple {
+                encoder
+                    .write_image::<colortype::Gray8>(1, 3, &[0, 128, 255])
+                    .unwrap();
+            }
+        }
+        bytes.into_inner()
+    }
+
+    #[test]
+    fn tiff_decodes_common_compression_and_only_the_first_image() {
+        use tiff::encoder::Compression;
+        for compression in [
+            Compression::Uncompressed,
+            Compression::Lzw,
+            Compression::Deflate(Default::default()),
+            Compression::Packbits,
+        ] {
+            let (dimensions, pixels, reduced, animation) =
+                decode(Cursor::new(tiff_bytes(compression, 1, true)), 1024).unwrap();
+            assert_eq!(dimensions, [2, 1]);
+            assert_eq!(pixels.pixels, [egui::Color32::RED, egui::Color32::BLUE]);
+            assert!(!reduced);
+            assert!(animation.is_none());
+        }
+    }
+
+    #[test]
+    fn tiff_applies_orientation_and_converts_16_bit_grayscale() {
+        use tiff::encoder::{Compression, TiffEncoder, colortype};
+        let (dimensions, pixels, _, _) = decode(
+            Cursor::new(tiff_bytes(Compression::Uncompressed, 6, false)),
+            1024,
+        )
+        .unwrap();
+        assert_eq!(dimensions, [1, 2]);
+        assert_eq!(pixels.pixels, [egui::Color32::RED, egui::Color32::BLUE]);
+        let mut bytes = Cursor::new(Vec::new());
+        TiffEncoder::new(&mut bytes)
+            .unwrap()
+            .write_image::<colortype::Gray16>(3, 1, &[0, 32768, 65535])
+            .unwrap();
+        let (dimensions, pixels, _, _) = decode(Cursor::new(bytes.into_inner()), 1024).unwrap();
+        assert_eq!(dimensions, [3, 1]);
+        assert_eq!(
+            pixels.pixels,
+            [
+                egui::Color32::BLACK,
+                egui::Color32::from_gray(128),
+                egui::Color32::WHITE
+            ]
+        );
+    }
+
+    #[test]
+    fn tiff_rejects_truncated_pixels_oversized_canvas_and_large_decode_buffers() {
+        use tiff::encoder::{Compression, TiffEncoder, colortype};
+        let mut bytes = tiff_bytes(Compression::Uncompressed, 1, false);
+        assert!(decode(Cursor::new(&bytes[..7]), 1024).is_err());
+        // Move the first strip outside the file without damaging its directory.
+        let directory = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+        let tags = u16::from_le_bytes(bytes[directory..directory + 2].try_into().unwrap()) as usize;
+        for tag in 0..tags {
+            let offset = directory + 2 + tag * 12;
+            if u16::from_le_bytes(bytes[offset..offset + 2].try_into().unwrap()) == 273 {
+                bytes[offset + 8..offset + 12].copy_from_slice(&u32::MAX.to_le_bytes());
+            }
+        }
+        assert!(decode(Cursor::new(bytes), 1024).is_err());
+        for (width, height, message) in [
+            (8192, 8192, "32 megapixels"),
+            (4096, 4097, "decoding limits"),
+        ] {
+            let mut bytes = Cursor::new(Vec::new());
+            {
+                let mut encoder = TiffEncoder::new(&mut bytes).unwrap();
+                let mut frame = encoder.new_image::<colortype::RGBA32Float>(1, 1).unwrap();
+                frame
+                    .encoder()
+                    .write_tag(tiff::tags::Tag::ImageWidth, width as u32)
+                    .unwrap();
+                frame
+                    .encoder()
+                    .write_tag(tiff::tags::Tag::ImageLength, height as u32)
+                    .unwrap();
+                frame.write_data(&[1.0, 0.0, 0.0, 1.0]).unwrap();
+            }
+            assert!(
+                decode(Cursor::new(bytes.into_inner()), 1024)
+                    .unwrap_err()
+                    .contains(message)
+            );
+        }
+    }
+
     fn bmp(
         width: i32,
         height: i32,
@@ -424,6 +544,7 @@ mod tests {
             ImageFormat::Png,
             ImageFormat::WebP,
             ImageFormat::Bmp,
+            ImageFormat::Tiff,
         ] {
             let (dimensions, pixels, reduced, animation) =
                 decode(Cursor::new(encoded(format)), 1024).unwrap();
@@ -436,7 +557,12 @@ mod tests {
 
     #[test]
     fn preserves_transparency() {
-        for format in [ImageFormat::Png, ImageFormat::WebP, ImageFormat::Bmp] {
+        for format in [
+            ImageFormat::Png,
+            ImageFormat::WebP,
+            ImageFormat::Bmp,
+            ImageFormat::Tiff,
+        ] {
             let (_, pixels, _, _) = decode(Cursor::new(encoded(format)), 1024).unwrap();
             assert_eq!(pixels.pixels[0].a(), 128);
         }
@@ -444,7 +570,7 @@ mod tests {
 
     #[test]
     fn reduces_preview_without_losing_original_dimensions() {
-        for format in [ImageFormat::Png, ImageFormat::Bmp] {
+        for format in [ImageFormat::Png, ImageFormat::Bmp, ImageFormat::Tiff] {
             let (dimensions, pixels, reduced, _) = decode(Cursor::new(encoded(format)), 3).unwrap();
             assert_eq!(dimensions, [6, 4]);
             assert_eq!(pixels.size, [3, 2]);

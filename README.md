@@ -11,7 +11,7 @@
 Lumen is a small, dark-themed photo viewer built with Rust. Open a photo, move
 through its folder, and focus on the image.
 
-**Early development · Windows only · JPEG, PNG, WebP, GIF, and BMP**
+**Early development · Windows only · JPEG, PNG, WebP, GIF, BMP, and TIFF**
 
 <p align="center">
   <img src="assets/readme/screenshot.png" alt="Lumen displaying an alpine lake at dawn, with its dark toolbar and image controls" width="880">
@@ -45,6 +45,7 @@ Scroll to zoom and drag to pan. **Home** fits the image; **F11** toggles full sc
 
 See the [usage guide](docs/usage.md) for all controls and current limits.
 Animated PNG and WebP remain static; color profile management is not supported yet.
+TIFF displays the first image only.
 
 ## Project
 
