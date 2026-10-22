@@ -74,7 +74,7 @@ fn supported(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
-            ["jpg", "jpeg", "png", "webp"]
+            ["jpg", "jpeg", "png", "webp", "gif"]
                 .iter()
                 .any(|supported| extension.eq_ignore_ascii_case(supported))
         })
@@ -118,6 +118,34 @@ mod tests {
         let folder = Folder::single("only.png".into());
         assert!(folder.neighbor(Direction::Previous).is_none());
         assert!(folder.neighbor(Direction::Next).is_none());
+    }
+
+    #[test]
+    fn sorts_mixed_case_gif_names_naturally() {
+        let directory = tempfile::tempdir().unwrap();
+        for name in ["FRAME10.GiF", "frame2.gif", "Frame1.GIF"] {
+            std::fs::write(directory.path().join(name), []).unwrap();
+        }
+        let folder = Folder::scan(&directory.path().join("frame2.gif")).unwrap();
+        assert_eq!(folder.position(), (2, 3));
+        assert_eq!(
+            folder
+                .neighbor(Direction::Previous)
+                .unwrap()
+                .path()
+                .file_name()
+                .unwrap(),
+            "Frame1.GIF"
+        );
+        assert_eq!(
+            folder
+                .neighbor(Direction::Next)
+                .unwrap()
+                .path()
+                .file_name()
+                .unwrap(),
+            "FRAME10.GiF"
+        );
     }
 
     #[test]
