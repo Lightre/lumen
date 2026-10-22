@@ -547,15 +547,6 @@ impl LumenApp {
                     let source = egui::vec2(image.dimensions[0] as f32, image.dimensions[1] as f32);
                     let pixels_per_point = ctx.pixels_per_point();
                     let response = ui.allocate_rect(bounds, egui::Sense::click_and_drag());
-                    if let Some(playback) = &image.playback {
-                        response.clone().on_hover_text(if playback.playing {
-                            "Pause animation · Space"
-                        } else if playback.finished {
-                            "Replay animation · Space"
-                        } else {
-                            "Resume animation · Space"
-                        });
-                    }
                     if response.double_clicked() {
                         if self.view.is_fit() {
                             self.view.actual_size();
