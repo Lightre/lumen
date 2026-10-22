@@ -266,9 +266,10 @@ impl LumenApp {
             .spawn(move || {
                 let result = match request {
                     OpenRequest::Pick => {
-                        let mut dialog = rfd::FileDialog::new()
-                            .set_title("Open image")
-                            .add_filter("Images", &["jpg", "jpeg", "png", "webp", "gif", "bmp"]);
+                        let mut dialog = rfd::FileDialog::new().set_title("Open image").add_filter(
+                            "Images",
+                            &["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff"],
+                        );
                         if let Some(directory) = directory {
                             dialog = dialog.set_directory(directory);
                         }
@@ -527,7 +528,7 @@ impl LumenApp {
                         });
                     } else {
                         ui.label(
-                            egui::RichText::new("JPEG · PNG · WebP · GIF · BMP")
+                            egui::RichText::new("JPEG · PNG · WebP · GIF · BMP · TIFF")
                                 .size(12.0)
                                 .color(chrome::MUTED),
                         );
@@ -651,7 +652,7 @@ impl LumenApp {
                         }
                         ui.add_space(4.0);
                         ui.label(
-                            egui::RichText::new("Ctrl+O  ·  JPEG, PNG, WebP, GIF, BMP")
+                            egui::RichText::new("Ctrl+O  ·  JPEG, PNG, WebP, GIF, BMP, TIFF")
                                 .size(11.0)
                                 .color(chrome::MUTED),
                         );
