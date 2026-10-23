@@ -10,6 +10,10 @@ list of merged pull requests.
 - TIFF viewing (`.tif` and `.tiff`), showing the first image in multi-image files.
 - HEIC/HEIF main-photo viewing with a bundled HEVC decoder; no codec installation required.
 
+### Changed
+
+- Reuse GPU image textures during photo navigation and GIF playback.
+
 ## [0.2.0] - 2026-10-22
 
 ### Added

@@ -1,5 +1,6 @@
 use eframe::egui;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
@@ -61,6 +62,15 @@ struct DisplayedImage {
     dimensions: [u32; 2],
     reduced: bool,
     playback: Option<Playback>,
+}
+
+fn update_texture(texture: &mut egui::TextureHandle, pixels: Arc<egui::ColorImage>) {
+    if texture.size() == pixels.size {
+        // Replace every pixel without reallocating same-sized GPU storage.
+        texture.set_partial([0, 0], pixels, egui::TextureOptions::LINEAR);
+    } else {
+        texture.set(pixels, egui::TextureOptions::LINEAR);
+    }
 }
 
 struct Playback {
@@ -327,8 +337,15 @@ impl LumenApp {
                         .to_string_lossy()
                 );
                 ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
+                let texture = if let Some(previous) = self.image.take() {
+                    let mut texture = previous.texture;
+                    update_texture(&mut texture, loaded.pixels);
+                    texture
+                } else {
+                    ctx.load_texture("photo", loaded.pixels, egui::TextureOptions::LINEAR)
+                };
                 self.image = Some(DisplayedImage {
-                    texture: ctx.load_texture("photo", loaded.pixels, egui::TextureOptions::LINEAR),
+                    texture,
                     path: loaded.path,
                     dimensions: loaded.dimensions,
                     reduced: loaded.reduced,
@@ -369,9 +386,9 @@ impl LumenApp {
                 ctx.request_repaint_after(delay);
             }
             if playback.frame != previous {
-                image.texture.set(
+                update_texture(
+                    &mut image.texture,
                     playback.animation.frames[playback.frame].pixels.clone(),
-                    egui::TextureOptions::LINEAR,
                 );
             }
         }
@@ -940,6 +957,85 @@ mod tests {
         image::RgbaImage::from_pixel(3, 2, image::Rgba([100, 150, 200, 255]))
             .save(path)
             .unwrap();
+    }
+
+    #[test]
+    fn reuses_photo_texture_across_sizes_and_animation_transitions() {
+        let ctx = egui::Context::default();
+        let mut app = LumenApp::default();
+        let mut texture_id = None;
+        let mut previous_size = None;
+        for (index, (size, animated)) in [
+            ([4, 3], false),
+            ([4, 3], false),
+            ([2, 5], true),
+            ([2, 5], true),
+            ([2, 5], false),
+            ([4, 3], false),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let pixels = Arc::new(egui::ColorImage::filled(
+                size,
+                egui::Color32::from_rgba_unmultiplied(20 * index as u8, 90, 170, 128),
+            ));
+            let path = PathBuf::from(format!(
+                "photo{index}.{}",
+                if animated { "gif" } else { "png" }
+            ));
+            let animation = animated.then(|| Animation {
+                frames: vec![
+                    image_loader::AnimationFrame {
+                        pixels: pixels.clone(),
+                        delay: Duration::from_millis(100),
+                    },
+                    image_loader::AnimationFrame {
+                        pixels: Arc::new(egui::ColorImage::filled(size, egui::Color32::RED)),
+                        delay: Duration::from_millis(100),
+                    },
+                ],
+                plays: None,
+            });
+            let (sender, receiver) = mpsc::channel();
+            sender
+                .send(Ok(Some(OpenedImage {
+                    image: LoadedImage {
+                        path: path.clone(),
+                        dimensions: [size[0] as u32, size[1] as u32],
+                        pixels: pixels.clone(),
+                        reduced: false,
+                        animation,
+                    },
+                    folder: Folder::single(path.clone()),
+                    notice: None,
+                })))
+                .unwrap();
+            app.pending = Some(receiver);
+            app.finish_loading(&ctx);
+            let displayed = app.image.as_ref().unwrap();
+            let id = displayed.texture.id();
+            assert_eq!(*texture_id.get_or_insert(id), id);
+            assert_eq!(displayed.path, path);
+            assert_eq!(displayed.texture.size(), size);
+            assert_eq!(displayed.playback.is_some(), animated);
+            let mut delta = ctx.tex_manager().write().take_delta();
+            assert!(
+                delta.free.is_empty(),
+                "Photo transitions must not delete textures"
+            );
+            let updates = delta.set.get(&id).unwrap();
+            assert_eq!(updates.len(), 1);
+            let update = &updates[0];
+            assert_eq!(update.pos, (previous_size == Some(size)).then_some([0, 0]));
+            let egui::ImageData::Color(uploaded) = &update.image;
+            assert!(
+                Arc::ptr_eq(uploaded, &pixels),
+                "Upload the decoder's exact pixels without resizing or conversion"
+            );
+            previous_size = Some(size);
+            delta.clear();
+        }
     }
 
     #[test]
