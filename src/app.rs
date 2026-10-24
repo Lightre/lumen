@@ -577,10 +577,15 @@ impl LumenApp {
                                 );
                             });
                         } else {
-                            ui.label(
-                                egui::RichText::new("JPEG · PNG · WebP · GIF · BMP · TIFF · HEIC")
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(
+                                        "JPEG · PNG · WebP · GIF · BMP · TIFF · HEIC",
+                                    )
                                     .size(12.0)
                                     .color(chrome::MUTED),
+                                )
+                                .selectable(false),
                             );
                         }
                     });
@@ -687,25 +692,36 @@ impl LumenApp {
                             )));
                         }
                         ui.add_space(10.0);
-                        ui.label(
-                            egui::RichText::new("Lumen")
-                                .size(28.0)
-                                .color(egui::Color32::from_rgb(240, 241, 237)),
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("Lumen")
+                                    .size(28.0)
+                                    .color(egui::Color32::from_rgb(240, 241, 237)),
+                            )
+                            .selectable(false),
                         );
-                        ui.label(
-                            egui::RichText::new("Open a photo or drop it here.")
-                                .size(14.0)
-                                .color(chrome::MUTED),
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("Open a photo or drop it here.")
+                                    .size(14.0)
+                                    .color(chrome::MUTED),
+                            )
+                            .selectable(false),
                         );
                         ui.add_space(12.0);
                         if chrome::open_button(ui, self.pending.is_none()).clicked() {
                             self.open(&ctx, None);
                         }
                         ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new("Ctrl+O  ·  JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC")
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(
+                                    "Ctrl+O  ·  JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC",
+                                )
                                 .size(11.0)
                                 .color(chrome::MUTED),
+                            )
+                            .selectable(false),
                         );
                     },
                 );
