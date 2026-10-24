@@ -161,15 +161,15 @@ fn preview(mut decoded: DynamicImage, max_side: u32) -> (Arc<egui::ColorImage>, 
     if reduced {
         decoded = decoded.resize(max_side, max_side, image::imageops::FilterType::Triangle);
     }
-    let rgba = decoded.into_rgba8();
-    let size = [rgba.width() as usize, rgba.height() as usize];
-    (
-        Arc::new(egui::ColorImage::from_rgba_unmultiplied(
-            size,
-            rgba.as_raw(),
-        )),
-        reduced,
-    )
+    let size = [decoded.width() as usize, decoded.height() as usize];
+    let pixels = match decoded {
+        DynamicImage::ImageRgb8(rgb) => egui::ColorImage::from_rgb(size, rgb.as_raw()),
+        decoded => {
+            let rgba = decoded.into_rgba8();
+            egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw())
+        }
+    };
+    (Arc::new(pixels), reduced)
 }
 
 fn decode_gif(
@@ -650,6 +650,34 @@ mod tests {
             assert_eq!(pixels.size, [6, 4]);
             assert!(!reduced);
             assert!(animation.is_none());
+        }
+    }
+
+    #[test]
+    fn direct_rgb_preview_matches_rgba_conversion_exactly() {
+        let rgb = image::RgbImage::from_fn(17, 17, |x, y| {
+            let value = (x + y * 17) as u8;
+            image::Rgb([value, value.wrapping_mul(73), 255 - value])
+        });
+        let rgba = image::RgbaImage::from_fn(17, 17, |x, y| {
+            let value = (x + y * 17) as u8;
+            image::Rgba([value, value.wrapping_mul(73), 255 - value, value])
+        });
+        for original in [DynamicImage::ImageRgb8(rgb), DynamicImage::ImageRgba8(rgba)] {
+            for max_side in [8192, 7] {
+                let expected = if max_side < 17 {
+                    original.resize(max_side, max_side, image::imageops::FilterType::Triangle)
+                } else {
+                    original.clone()
+                }
+                .into_rgba8();
+                let size = [expected.width() as usize, expected.height() as usize];
+                let expected = egui::ColorImage::from_rgba_unmultiplied(size, expected.as_raw());
+                let (actual, reduced) = preview(original.clone(), max_side);
+                assert_eq!(actual.size, expected.size);
+                assert_eq!(actual.pixels, expected.pixels);
+                assert_eq!(reduced, max_side < 17);
+            }
         }
     }
 
