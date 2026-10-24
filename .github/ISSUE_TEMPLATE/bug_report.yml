@@ -1,0 +1,28 @@
+name: Bug report
+description: Report a problem with Lumen.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Lumen version
+      description: Shown at the bottom right of a wide window.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected. Screenshots are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If possible, explain how to trigger the problem.
+  - type: input
+    id: context
+    attributes:
+      label: Windows version and image details
+      placeholder: Windows 11; JPEG, 6000 x 4000
