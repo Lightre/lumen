@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest an improvement to Lumen.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: What would you like to change?
+      description: Briefly describe your idea.
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Why would it help?
+      description: Optionally describe when you would use it.
