@@ -5,6 +5,8 @@ list of merged pull requests.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-24
+
 ### Added
 
 - TIFF viewing (`.tif` and `.tiff`), showing the first image in multi-image files.
