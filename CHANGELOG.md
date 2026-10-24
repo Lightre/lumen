@@ -9,6 +9,7 @@ list of merged pull requests.
 
 - TIFF viewing (`.tif` and `.tiff`), showing the first image in multi-image files.
 - HEIC/HEIF main-photo viewing with a bundled HEVC decoder; no codec installation required.
+- A subtle application version in the status bar, hidden in narrow windows.
 
 ### Changed
 
