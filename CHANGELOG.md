@@ -14,6 +14,7 @@ list of merged pull requests.
 ### Changed
 
 - Reuse GPU image textures during photo navigation and GIF playback.
+- Avoid an intermediate RGBA buffer when preparing 8-bit RGB image previews.
 
 ## [0.2.0] - 2026-10-22
 
