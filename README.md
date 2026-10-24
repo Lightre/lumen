@@ -26,9 +26,8 @@ through its folder, and focus on the image.
 
 ## Try it
 
-Download the latest release from **[GitHub Releases](https://github.com/Lightre/lumen/releases/latest)**.
-The repository is private, so downloading requires a GitHub account with
-repository access. Extract the ZIP before running `lumen.exe`.
+Download the Windows x64 ZIP from the **[latest release](https://github.com/Lightre/lumen/releases/latest)**.
+Extract the ZIP before running `lumen.exe`.
 
 To run from source, install stable Rust with the MSVC toolchain and the Windows
 C++ build tools, including the Windows SDK, then run:
