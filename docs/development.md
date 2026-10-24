@@ -155,7 +155,6 @@ Review the complete notes before publishing, especially for the first release.
 A failed draft creation can be rerun. Existing drafts receive refreshed package
 assets without overwriting manually edited notes. The workflow refuses to update
 an already published release and never publishes a draft or marks it as latest.
-The repository remains private; publishing a release does not change its visibility.
 
 Local metadata validation requires Python 3.11 or newer:
 
