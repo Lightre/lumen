@@ -501,58 +501,94 @@ impl LumenApp {
                             }
                         });
                     }
-                    if let Some(image) = &self.image {
-                        ui.horizontal(|ui| {
-                            let mut details =
-                                format!("{} × {}", image.dimensions[0], image.dimensions[1]);
-                            if image.reduced {
-                                details.push_str("  ·  Reduced preview");
-                            }
-                            if let Some(playback) = &image.playback
-                                && !playback.playing
-                            {
-                                details.push_str(if playback.finished {
-                                    "  ·  Finished"
-                                } else {
-                                    "  ·  Paused"
-                                });
-                            }
-                            let width = ui
-                                .painter()
-                                .layout_no_wrap(
-                                    details.clone(),
-                                    egui::FontId::proportional(12.0),
-                                    chrome::MUTED,
-                                )
-                                .size()
-                                .x;
-                            let name_width = (ui.available_width() - width - 16.0).max(0.0);
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(name_width, 20.0),
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    ui.add(
-                                        egui::Label::new(
-                                            image
-                                                .path
-                                                .file_name()
-                                                .unwrap_or_default()
-                                                .to_string_lossy(),
-                                        )
-                                        .truncate(),
-                                    )
-                                    .on_hover_text(image.path.to_string_lossy());
-                                },
-                            );
-                            ui.label(egui::RichText::new(details).size(12.0).color(chrome::MUTED));
-                        });
-                    } else {
-                        ui.label(
-                            egui::RichText::new("JPEG · PNG · WebP · GIF · BMP · TIFF · HEIC")
-                                .size(12.0)
-                                .color(chrome::MUTED),
+                    let version = concat!("v", env!("CARGO_PKG_VERSION"));
+                    let version_width = ui
+                        .painter()
+                        .layout_no_wrap(
+                            version.to_owned(),
+                            egui::FontId::proportional(12.0),
+                            chrome::MUTED,
+                        )
+                        .size()
+                        .x;
+                    let show_version = ui.available_width() >= 600.0;
+                    let content_width = ui.available_width()
+                        - if show_version {
+                            version_width + 24.0
+                        } else {
+                            0.0
+                        };
+                    if show_version {
+                        ui.painter().text(
+                            egui::pos2(ui.max_rect().right(), ui.cursor().top() + 10.0),
+                            egui::Align2::RIGHT_CENTER,
+                            version,
+                            egui::FontId::proportional(12.0),
+                            chrome::MUTED,
                         );
                     }
+                    ui.scope(|ui| {
+                        ui.set_max_width(content_width);
+                        if let Some(image) = &self.image {
+                            ui.horizontal(|ui| {
+                                let mut details =
+                                    format!("{} × {}", image.dimensions[0], image.dimensions[1]);
+                                if image.reduced {
+                                    details.push_str("  ·  Reduced preview");
+                                }
+                                if let Some(playback) = &image.playback
+                                    && !playback.playing
+                                {
+                                    details.push_str(if playback.finished {
+                                        "  ·  Finished"
+                                    } else {
+                                        "  ·  Paused"
+                                    });
+                                }
+                                let width = ui
+                                    .painter()
+                                    .layout_no_wrap(
+                                        details.clone(),
+                                        egui::FontId::proportional(12.0),
+                                        chrome::MUTED,
+                                    )
+                                    .size()
+                                    .x;
+                                let name_width = (ui.available_width() - width - 16.0).max(0.0);
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(name_width, 20.0),
+                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    |ui| {
+                                        ui.add(
+                                            egui::Label::new(
+                                                image
+                                                    .path
+                                                    .file_name()
+                                                    .unwrap_or_default()
+                                                    .to_string_lossy(),
+                                            )
+                                            .truncate(),
+                                        )
+                                        .on_hover_text(image.path.to_string_lossy());
+                                    },
+                                );
+                                ui.label(
+                                    egui::RichText::new(details).size(12.0).color(chrome::MUTED),
+                                );
+                            });
+                        } else {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(
+                                        "JPEG · PNG · WebP · GIF · BMP · TIFF · HEIC",
+                                    )
+                                    .size(12.0)
+                                    .color(chrome::MUTED),
+                                )
+                                .selectable(false),
+                            );
+                        }
+                    });
                 });
         }
 
@@ -656,25 +692,36 @@ impl LumenApp {
                             )));
                         }
                         ui.add_space(10.0);
-                        ui.label(
-                            egui::RichText::new("Lumen")
-                                .size(28.0)
-                                .color(egui::Color32::from_rgb(240, 241, 237)),
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("Lumen")
+                                    .size(28.0)
+                                    .color(egui::Color32::from_rgb(240, 241, 237)),
+                            )
+                            .selectable(false),
                         );
-                        ui.label(
-                            egui::RichText::new("Open a photo or drop it here.")
-                                .size(14.0)
-                                .color(chrome::MUTED),
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("Open a photo or drop it here.")
+                                    .size(14.0)
+                                    .color(chrome::MUTED),
+                            )
+                            .selectable(false),
                         );
                         ui.add_space(12.0);
                         if chrome::open_button(ui, self.pending.is_none()).clicked() {
                             self.open(&ctx, None);
                         }
                         ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new("Ctrl+O  ·  JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC")
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(
+                                    "Ctrl+O  ·  JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC",
+                                )
                                 .size(11.0)
                                 .color(chrome::MUTED),
+                            )
+                            .selectable(false),
                         );
                     },
                 );
