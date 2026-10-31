@@ -6,6 +6,9 @@ use std::time::Duration;
 use eframe::egui;
 use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 
+#[path = "image_loader/preview.rs"]
+mod preview;
+
 #[cfg(windows)]
 #[path = "image_loader/heic.rs"]
 mod heic;
@@ -159,6 +162,15 @@ fn preview(mut decoded: DynamicImage, max_side: u32) -> (Arc<egui::ColorImage>, 
     let max_side = max_side.clamp(1, 8192);
     let reduced = dimensions.iter().any(|side| *side > max_side);
     if reduced {
+        match &decoded {
+            DynamicImage::ImageRgb8(rgb) => {
+                return (Arc::new(preview::resize(rgb, max_side)), true);
+            }
+            DynamicImage::ImageRgba8(rgba) => {
+                return (Arc::new(preview::resize(rgba, max_side)), true);
+            }
+            _ => {}
+        }
         decoded = decoded.resize(max_side, max_side, image::imageops::FilterType::Triangle);
     }
     let size = [decoded.width() as usize, decoded.height() as usize];
@@ -677,6 +689,54 @@ mod tests {
                 assert_eq!(actual.size, expected.size);
                 assert_eq!(actual.pixels, expected.pixels);
                 assert_eq!(reduced, max_side < 17);
+            }
+        }
+    }
+
+    #[test]
+    fn streamed_triangle_preview_matches_reference_across_shapes_and_alpha() {
+        for (width, height) in [(1, 41), (41, 1), (17, 31), (31, 17), (73, 137), (137, 73)] {
+            let rgb = image::RgbImage::from_fn(width, height, |x, y| {
+                let value = (x.wrapping_mul(73) ^ y.wrapping_mul(151)) as u8;
+                image::Rgb([value, value.wrapping_mul(37), 255 - value])
+            });
+            let rgba = image::RgbaImage::from_fn(width, height, |x, y| {
+                let value = (x.wrapping_mul(73) ^ y.wrapping_mul(151)) as u8;
+                image::Rgba([value, value.wrapping_mul(37), 255 - value, value])
+            });
+            let high_depth = image::ImageBuffer::from_fn(width, height, |x, y| {
+                image::Rgba([
+                    (x * 473) as u16,
+                    (y * 811) as u16,
+                    32768,
+                    (x * y * 127) as u16,
+                ])
+            });
+            for original in [
+                DynamicImage::ImageRgb8(rgb),
+                DynamicImage::ImageRgba8(rgba),
+                DynamicImage::ImageRgba16(high_depth),
+            ] {
+                for max_side in [1, 2, 7, 32, 8192] {
+                    let reduced = width.max(height) > max_side;
+                    let reference = if reduced {
+                        original.resize(max_side, max_side, image::imageops::FilterType::Triangle)
+                    } else {
+                        original.clone()
+                    }
+                    .into_rgba8();
+                    let expected = egui::ColorImage::from_rgba_unmultiplied(
+                        [reference.width() as usize, reference.height() as usize],
+                        reference.as_raw(),
+                    );
+                    let (actual, actual_reduced) = preview(original.clone(), max_side);
+                    assert_eq!(actual_reduced, reduced);
+                    assert_eq!(actual.size, expected.size);
+                    assert_eq!(
+                        actual.pixels, expected.pixels,
+                        "{width}x{height}, limit {max_side}"
+                    );
+                }
             }
         }
     }

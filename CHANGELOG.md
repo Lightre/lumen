@@ -5,6 +5,10 @@ list of merged pull requests.
 
 ## [Unreleased]
 
+### Changed
+
+- Reduce temporary memory when resizing large 8-bit color image previews, preserving the existing preview quality.
+
 ## [0.3.0] - 2026-10-24
 
 ### Added
