@@ -7,7 +7,6 @@ updates:
     open-pull-requests-limit: 1
     commit-message:
       prefix: build
-      include-scope: false
     groups:
       cargo-dependencies:
         applies-to: version-updates
@@ -20,7 +19,6 @@ updates:
     open-pull-requests-limit: 1
     commit-message:
       prefix: build
-      include-scope: false
     groups:
       github-actions:
         applies-to: version-updates
