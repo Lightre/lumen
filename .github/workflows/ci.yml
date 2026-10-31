@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   check:
+    name: Rust checks
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
