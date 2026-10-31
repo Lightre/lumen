@@ -34,7 +34,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Prepare Rust
         run: |
           rustup toolchain install stable --profile minimal
