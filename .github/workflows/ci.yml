@@ -29,3 +29,8 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Test
         run: cargo test --locked
+      - name: Check measurement tooling
+        run: |
+          cargo clippy --locked --all-targets --features perf -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --features perf

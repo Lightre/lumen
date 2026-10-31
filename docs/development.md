@@ -33,6 +33,62 @@ needed. They do not measure application startup, GPU upload, or input-to-display
 latency. The filesystem cache is warm; compare results on the same machine and
 avoid treating synthetic-image timings as guarantees for real photos.
 
+### Navigation measurements
+
+Use PowerShell 7 on Windows to drive the real application through an explicitly
+selected folder and collect process memory, CPU time, and loading events:
+
+```powershell
+./scripts/measure-navigation.ps1 -ImageDirectory "C:\Photos\Test" -RunName baseline
+```
+
+The folder is required on every invocation, is not remembered, and is read only.
+Only supported files directly inside it are used; subfolders are not searched.
+The script builds an optimized EXE with the optional `perf` feature in
+`target/perf/build/`. Ordinary builds exclude the measurement controller.
+Each invocation copies its EXE into a unique directory under `target/perf/runs/`.
+These generated files are ignored by Git. Keep input folders outside `target/`
+if they must survive build cleanup, and archive results before cleaning `target/`.
+
+By default, each normal/rapid and forward/backward combination runs one warm-up
+and three measured repetitions, visiting up to 100 images per process. Normal
+navigation waits 250 ms after each frame is queued; rapid navigation requests a
+step at a target interval of 60 ms, including requests ignored while loading.
+Rendering and OS scheduling can delay these requests; actual event times are
+recorded instead of assuming that the target interval was met. Each process waits
+20 seconds at its final image before closing. Animated images continue playing
+during this period. Do not interact with or resize the measurement windows.
+Errors, skipped images, timeouts, and incomplete runs fail the script rather than
+contributing successful samples. It only terminates the processes it starts.
+
+For a short check, use `-Repetitions 1 -WarmupRuns 0 -MaxImages 10
+-SettleSeconds 2`. Other options include `-Scenario Normal`, `-Direction Forward`,
+`-NormalDelayMs`, `-RapidIntervalMs`, `-SampleIntervalMs`, and `-TimeoutSeconds`.
+`-ExecutablePath` accepts an existing EXE built with `--features perf`; its hash
+is recorded, but its source revision cannot be inferred. A normal release EXE
+cannot run this protocol.
+
+`metadata.json` records settings, source revision, EXE hash, and an aggregate
+dataset hash. It does not store the input folder or file names. Per-process
+`memory.csv` samples working set, private memory, observed process peak working
+set, and accumulated CPU milliseconds every 100 ms. Sampling can miss short
+private-memory peaks; the process peak working-set counter covers earlier peaks
+observed before the final sample. `events.csv` records image indices, extension-based formats,
+source dimensions, loader durations, and request-to-frame-queued durations.
+This boundary includes application work through egui drawing, not GPU completion
+or physical presentation. The initial load is included; loader time covers file
+reading, decoding, conversion, and any preview resizing.
+
+`runs.csv`/`runs.json` retain individual results including warm-ups; `summary.json`
+reports measured repetitions only. Compare the same dataset hash, parameters,
+display scaling, window size, machine, and background workload before and after
+a change. Input files are read for hashing before timing, which warms the filesystem
+cache; this is not a controlled cold-cache test. The OS cache is not flushed, and
+large datasets may exceed it. Timings and memory remain variable. Full event logs
+are buffered in memory until completion; use `-EventLogging Minimal` for a
+separate check of logging overhead. Minimal logs retain outcome/settling events
+and aggregate counters, omitting individual image events. No results are uploaded.
+
 ## Packaging
 
 After building a release, create a portable ZIP with PowerShell 7:
