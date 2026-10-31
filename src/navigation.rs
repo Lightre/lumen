@@ -14,6 +14,22 @@ pub struct Folder {
 }
 
 impl Folder {
+    #[cfg(feature = "perf")]
+    pub fn measurement_start(directory: &Path, direction: Direction) -> Result<Self, String> {
+        let first = std::fs::read_dir(directory)
+            .map_err(|_| "The test folder could not be read.")?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| supported(path) && path.is_file())
+            .ok_or("The test folder contains no supported images.")?;
+        let mut folder = Self::scan(&first)?;
+        folder.index = match direction {
+            Direction::Next => 0,
+            Direction::Previous => folder.files.len() - 1,
+        };
+        Ok(folder)
+    }
+
     pub fn scan(current: &Path) -> Result<Self, String> {
         let current = current
             .canonicalize()

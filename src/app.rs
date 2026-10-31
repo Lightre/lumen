@@ -13,6 +13,8 @@ struct OpenedImage {
     image: LoadedImage,
     folder: Folder,
     notice: Option<String>,
+    #[cfg(feature = "perf")]
+    loader_ms: f64,
 }
 
 type LoadResult = Result<Option<OpenedImage>, String>;
@@ -24,7 +26,11 @@ enum OpenRequest {
 }
 
 fn load_selection(path: PathBuf, max_side: u32) -> Result<OpenedImage, String> {
+    #[cfg(feature = "perf")]
+    let started = Instant::now();
     let image = image_loader::load(&path, max_side)?;
+    #[cfg(feature = "perf")]
+    let loader_ms = started.elapsed().as_secs_f64() * 1000.0;
     let (folder, notice) = match Folder::scan(&path) {
         Ok(folder) => (folder, None),
         Err(error) => (Folder::single(path), Some(error)),
@@ -33,6 +39,8 @@ fn load_selection(path: PathBuf, max_side: u32) -> Result<OpenedImage, String> {
         image,
         folder,
         notice,
+        #[cfg(feature = "perf")]
+        loader_ms,
     })
 }
 
@@ -44,11 +52,15 @@ fn load_neighbor(
     let mut skipped = false;
     while let Some(next) = folder.neighbor(direction) {
         folder = next;
+        #[cfg(feature = "perf")]
+        let started = Instant::now();
         if let Ok(image) = image_loader::load(folder.path(), max_side) {
             return Ok(OpenedImage {
                 image,
                 folder,
                 notice: skipped.then(|| "Some unreadable images were skipped.".to_owned()),
+                #[cfg(feature = "perf")]
+                loader_ms: started.elapsed().as_secs_f64() * 1000.0,
             });
         }
         skipped = true;
@@ -151,9 +163,20 @@ pub struct LumenApp {
     view: View,
     startup_path: Option<PathBuf>,
     brand: Option<egui::TextureHandle>,
+    #[cfg(feature = "perf")]
+    perf: Option<crate::perf::Session>,
 }
 
 impl LumenApp {
+    #[cfg(feature = "perf")]
+    pub fn with_measurement(
+        mut self,
+        config: Option<crate::perf::Config>,
+    ) -> std::io::Result<Self> {
+        self.perf = config.map(crate::perf::Session::new).transpose()?;
+        Ok(self)
+    }
+
     pub fn new(cc: &eframe::CreationContext<'_>, startup_path: Option<PathBuf>) -> Self {
         chrome::configure(&cc.egui_ctx);
         let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
@@ -262,7 +285,15 @@ impl LumenApp {
 
     fn start_loading(&mut self, ctx: &egui::Context, request: OpenRequest) {
         if self.pending.is_some() {
+            #[cfg(feature = "perf")]
+            if let Some(perf) = &mut self.perf {
+                perf.ignored();
+            }
             return;
+        }
+        #[cfg(feature = "perf")]
+        if let Some(perf) = &mut self.perf {
+            perf.load_started();
         }
         let (sender, receiver) = mpsc::channel();
         let ctx = ctx.clone();
@@ -353,6 +384,16 @@ impl LumenApp {
                         .animation
                         .map(|animation| Playback::new(animation, Instant::now())),
                 });
+                #[cfg(feature = "perf")]
+                if let Some(perf) = &mut self.perf {
+                    perf.image_ready(
+                        self.folder.as_ref().unwrap().position(),
+                        self.image.as_ref().unwrap().dimensions,
+                        self.image.as_ref().unwrap().playback.is_some(),
+                        opened.loader_ms,
+                        &self.image.as_ref().unwrap().path,
+                    );
+                }
             }
             Ok(None) => {}
             Err(error) => self.error = Some(error),
@@ -732,6 +773,19 @@ impl LumenApp {
 impl eframe::App for LumenApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.show(ui);
+        #[cfg(feature = "perf")]
+        if let Some(perf) = &mut self.perf {
+            let action = perf.tick(self.pending.is_some(), self.error.is_some());
+            ui.ctx()
+                .request_repaint_after(perf.wake_after(self.pending.is_some()));
+            match action {
+                crate::perf::Action::Navigate(direction) => self.navigate(ui.ctx(), direction),
+                crate::perf::Action::Close => {
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close)
+                }
+                crate::perf::Action::Wait => {}
+            }
+        }
     }
 }
 
@@ -1056,6 +1110,8 @@ mod tests {
                     },
                     folder: Folder::single(path.clone()),
                     notice: None,
+                    #[cfg(feature = "perf")]
+                    loader_ms: 0.0,
                 })))
                 .unwrap();
             app.pending = Some(receiver);
