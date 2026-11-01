@@ -10,7 +10,7 @@ list of merged pull requests.
 ### Changed
 
 - Reduce temporary memory when resizing large 8-bit color image previews, preserving the existing preview quality.
-- Update the bundled Tokio dependency to 1.54.1.
+- Update Tokio in the locked dependency graph to 1.54.1.
 
 ## [0.3.0] - 2026-10-24
 
